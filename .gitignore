@@ -1,0 +1,10 @@
+# Ignore all log files
+*.log
+
+# Ignore specific directories
+Datasets/DeepShip
+tb_logs/
+PANN_Weights/
+
+# Ignore specific large files
+

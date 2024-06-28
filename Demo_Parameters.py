@@ -143,9 +143,9 @@ def Parameters(args):
         #stride = [2, 2]
         stride = 2
         in_channels = {"resnet50": 2048, "resnet18": 512, "efficientnet": 1280, "regnet": 400,
-                       "resnet50_wide": 2048, "resnet50_next": 2048, "densenet121": 1024, 'TDNN': 4, 'AST': 1,'CNN_14': 2048}
+                       "resnet50_wide": 2048, "resnet50_next": 2048, "densenet121": 1024, 'TDNN': 4,'CNN_14': 2048}
         kernel_size = {"resnet50": [4,4],  "resnet18": [4,4], "efficientnet": [4,4], "regnet": [4,4],
-                       "resnet50_wide": [4,4], "resnet50_next": [4,4], "densenet121": [1,1],'TDNN': [3,3], 'AST': 3, 'CNN_14': [3,3]}
+                       "resnet50_wide": [4,4], "resnet50_next": [4,4], "densenet121": [1,1],'TDNN': [3,3], 'CNN_14': [3,3]}
     
     #Visualization of results parameters
     #Visualization parameters for figures

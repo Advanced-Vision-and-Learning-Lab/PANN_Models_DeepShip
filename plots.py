@@ -19,7 +19,7 @@ def plot_tsne(tsne_results, labels, title):
     scatter = plt.scatter(tsne_results[:, 0], tsne_results[:, 1], c=labels, cmap='viridis', s=5)
     plt.legend(handles=scatter.legend_elements()[0], labels=set(labels))
     plt.title(title)
-    plt.savefig(f"{title.replace(' ', '_')}.png")
+    plt.savefig(f"features/{title.replace(' ', '_')}.png")
     plt.close()
 
 def plot_confusion_matrix(preds, labels, class_names, output_file):
@@ -38,5 +38,9 @@ def generate_tsne_plots():
 if __name__ == "__main__":
     generate_tsne_plots()
     class_names = ['Cargo', 'Passengership', 'Tanker', 'Tug']
-    test_preds, test_labels = load_features("features/test_features.pth")
-    plot_confusion_matrix(test_preds, test_labels, class_names, output_file="confusion_matrix_test.png")
+    
+    # Load test predictions and labels
+    test_preds = torch.load("features/test_preds.pth")
+    test_labels = torch.load("features/test_labels.pth")
+    
+    plot_confusion_matrix(test_preds, test_labels, class_names, output_file="features/confusion_matrix_test.png")

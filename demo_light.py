@@ -17,42 +17,27 @@ import torch
 import torch.nn as nn
 
 # Local external libraries
-from Utils.Network_functions import initialize_model
-from Utils.RBFHistogramPooling import HistogramLayer
-from Utils.Save_Results import save_results
-from Utils.Get_Optimizer import get_optimizer
 from Demo_Parameters import Parameters
 
-from confusion_matrix_util import plot_confusion_matrix
 
-
-from Utils.TDNN import TDNN
 import torch.nn.functional as F
 import os
-from Utils.Save_Results import get_file_location
 
 import lightning as L
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
-import tqdm
 
-import pdb
 
 from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 import torchmetrics
-from lightning.pytorch.callbacks import TQDMProgressBar
-
-from torchmetrics import Accuracy
 
 from Datasets.Get_preprocessed_data import process_data
 
 from tqdm.auto import tqdm
-from lightning.pytorch.callbacks import Callback
-import time
-from torch.optim.lr_scheduler import CosineAnnealingLR
+
 # This code uses a newer version of numpy while other packages use an older version of numpy
 # This is a simple workaround to avoid errors that arise from the deprecation of numpy data types
 np.float = float  # module 'numpy' has no attribute 'float'
@@ -74,7 +59,7 @@ class LitModel(L.LightningModule):
 
         self.learning_rate = Params['lr']
 
-        self.model_ft, input_size, self.feature_extraction_layer = initialize_model(
+        self.model_ft, input_size, self.feature_layer, self.mel_extractor = initialize_model(
             model_name, 
             use_pretrained=Params['use_pretrained'], 
             feature_extract=Params['feature_extraction'], 
@@ -83,7 +68,6 @@ class LitModel(L.LightningModule):
         )
 
         self.save_hyperparameters()
-        self.first_epoch_time_start = None
         
         self.test_preds = []
         self.test_labels = []
@@ -97,27 +81,25 @@ class LitModel(L.LightningModule):
 
 
     def forward(self, x):
-        # Extract features using the feature extraction layer
-        features = self.feature_extraction_layer(x)
-        # Get the final predictions
-        features, y_pred = self.model_ft(features)
+        # Extract mel spectrogram if not PANN model
+        x = self.mel_extractor(x)
+        # features using the feature layer
+        
+        features, y_pred = self.model_ft(x)
         return features, y_pred
-    
+
+
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
         features, y_pred = self(x)  # Use the standardized forward method
         loss = F.cross_entropy(y_pred, y)
-    
+        
         self.train_acc(y_pred, y)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('loss', loss, on_step=True, on_epoch=True)
-    
+        
         return loss
-    
 
-    def on_train_epoch_start(self):
-        if self.current_epoch == 0:
-            self.first_epoch_time_start = time.time()
 
     def on_train_epoch_end(self):
         train_acc = self.train_acc.compute()
@@ -125,9 +107,6 @@ class LitModel(L.LightningModule):
         print(f'Training Accuracy: {train_acc:.4f}')
         self.train_acc.reset()
 
-        if self.current_epoch == 0 and self.first_epoch_time_start is not None:
-            epoch_duration = time.time() - self.first_epoch_time_start
-            print(f"Duration of the first epoch: {epoch_duration:.2f} seconds")
 
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
@@ -141,12 +120,10 @@ class LitModel(L.LightningModule):
         return val_loss
 
     def on_validation_epoch_end(self):
-        # Check if there have been updates before calling compute
-        if self.val_acc._num_updates > 0:
-            val_acc = self.val_acc.compute()
-            self.log('val_acc_epoch', val_acc)
-            print(f'Validation Accuracy: {val_acc:.4f}')
-            self.val_acc.reset()
+        val_acc = self.val_acc.compute()
+        self.log('val_acc_epoch', val_acc)
+        print(f'Validation Accuracy: {val_acc:.4f}')
+        self.val_acc.reset()
  
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
@@ -178,38 +155,25 @@ class LitModel(L.LightningModule):
         self.save_features("test")
     
     def save_features(self, phase):
-        # Define file paths to save features and labels
+        # Define file paths to save features, predictions, and labels
         os.makedirs("features", exist_ok=True)
         features_file_path = f"features/{phase}_features.pth"
         labels_file_path = f"features/{phase}_labels.pth"
+        preds_file_path = f"features/{phase}_preds.pth"
     
         # Convert lists to tensors
-        features_tensor = torch.cat(self.validation_features if phase == "validation" else self.test_features)
-        labels_tensor = torch.cat(self.validation_labels if phase == "validation" else self.test_labels)
+        features_tensor = torch.cat(self.test_features)
+        labels_tensor = torch.cat(self.test_labels)
+        preds_tensor = torch.cat(self.test_preds).argmax(dim=1)  # Convert logits to class labels
     
         # Save tensors
         torch.save({'features': features_tensor, 'labels': labels_tensor}, features_file_path)
-        print(f"Saved {phase} features to {features_file_path}")
-    
-    def compute_test_f1(self):
-        # Compute and log the F1 score for the test set
-        test_f1 = self.test_f1.compute()  # Compute F1 score
-        print(f'Test F1 Score: {test_f1:.4f}')  # Print F1 score
-        self.test_f1.reset()  # Reset F1 score
+        torch.save(labels_tensor, labels_file_path)
+        torch.save(preds_tensor, preds_file_path)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
-
-
-class TimeEpochCallback(Callback):
-    def on_epoch_start(self, trainer, pl_module):
-        self.start_time = time.time()
-
-    def on_epoch_end(self, trainer, pl_module):
-        end_time = time.time()
-        duration = end_time - self.start_time
-        print(f"Epoch {trainer.current_epoch} duration: {duration:.2f} seconds")
 
 
 def main(Params):
@@ -224,9 +188,9 @@ def main(Params):
     num_classes = Params['num_classes'][Dataset]
 
     # Local area of feature map after histogram layer
-    feat_map_size = Params['feat_map_size']
-    kernel_size = Params['kernel_size'][model_name]
-    in_channels = Params['in_channels'][model_name]
+    #feat_map_size = Params['feat_map_size']
+    #kernel_size = Params['kernel_size'][model_name]
+    #in_channels = Params['in_channels'][model_name]
 
     batch_size = Params['batch_size']
     batch_size = batch_size['train']
@@ -237,14 +201,13 @@ def main(Params):
     numRuns = 1
     run_number = 0
     seed_everything(run_number, workers=True)
-    all_runs_accs = []
-    
+
     data_dir = Params["data_dir"]  
     new_dir = Params["new_dir"]  
     
     process_data(sample_rate=Params['sample_rate'], segment_length=Params['segment_length'])
     print("\nDataset sample rate: ", Params['sample_rate'])
-    print("\nModel name: ", model_name)
+    print("\nModel name: ", model_name, "\n")
     
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
     data_module.prepare_data()
@@ -259,6 +222,7 @@ def main(Params):
         best_val_accs = []
         best_test_accs = []
         best_test_f1s = []  # Initialize list for best F1 scores
+    
         if run_number != 0:
             seed_everything(run_number, workers=True)
     
@@ -286,8 +250,8 @@ def main(Params):
         model_name=model_name, 
         num_classes=num_classes, 
         Dataset=Dataset, 
-        pretrained_loaded=False  # Indicate that pre-trained weights should be considered
-    )
+        pretrained_loaded=False  
+        )
     
     
         logger = TensorBoardLogger(
@@ -308,22 +272,22 @@ def main(Params):
     
         # Load best model checkpoint for testing
         best_model_path = checkpoint_callback.best_model_path
-        print(best_model_path)
+        #print(best_model_path)
         best_model = LitModel.load_from_checkpoint(
             checkpoint_path=best_model_path, 
             Params=Params, 
             model_name=model_name, 
             num_classes=num_classes, 
             Dataset=Dataset,
-            pretrained_loaded=True  # Indicate that pre-trained weights should not be reloaded
+            pretrained_loaded=True  
         )
         
         # Test the best model
         test_results = trainer.test(model=best_model, datamodule=data_module)
 
-        best_test_f1 = best_model.compute_test_f1()  # Compute and log the test F1 score
+        best_test_f1 = max(result['test_f1'] for result in test_results)
         best_test_f1s.append(best_test_f1)
-          
+        
         best_test_acc = max(result['test_acc'] for result in test_results)
         best_test_accs.append(best_test_acc)
     
@@ -334,7 +298,6 @@ def main(Params):
         average_test_acc = np.mean(best_test_accs)
         std_test_acc = np.std(best_test_accs)
         all_runs_test_accs.append(best_test_accs)
-    
     
         average_test_f1 = np.mean(best_test_f1s)
         std_test_f1 = np.std(best_test_f1s)

@@ -202,9 +202,9 @@ def main(Params):
     print('\nStarting Experiments...')
     
     
-    numRuns = 1
+    numRuns = 3
     run_number = 0
-    seed_everything(run_number, workers=True)
+    seed_everything(run_number+1, workers=True)
 
     data_dir = Params["data_dir"]  
     new_dir = Params["new_dir"]  
@@ -216,7 +216,6 @@ def main(Params):
     
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
     data_module.prepare_data()
-
 
     #data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
     #data_module.prepare_data()
@@ -233,7 +232,7 @@ def main(Params):
         best_test_f1s = []  # Initialize list for best F1 scores
     
         if run_number != 0:
-            seed_everything(run_number, workers=True)
+            seed_everything(run_number+1, workers=True)
     
         print(f'\nStarting Run {run_number}\n')
     

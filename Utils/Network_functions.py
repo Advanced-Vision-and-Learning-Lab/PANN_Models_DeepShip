@@ -31,7 +31,7 @@ from torchlibrosa.augmentation import SpecAugmentation
 
 
 class MelSpectrogramExtractor(nn.Module): 
-    def __init__(self, sample_rate=16000, n_fft=1024, win_length=512, hop_length=160, n_mels=64, fmin=50, fmax=8000):
+    def __init__(self, sample_rate=16000, n_fft=512, win_length=512, hop_length=160, n_mels=64, fmin=50, fmax=8000):
         super(MelSpectrogramExtractor, self).__init__()
         
         # Settings for Spectrogram
@@ -40,16 +40,17 @@ class MelSpectrogramExtractor(nn.Module):
         pad_mode = 'reflect'
         
         # Ensure this n_fft matches across all relevant uses
-        self.spectrogram_extractor = Spectrogram(n_fft=n_fft, hop_length=hop_length, 
+        self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
                                                  win_length=win_length, window=window, center=center, 
-                                                 pad_mode=pad_mode, power=2.0)
+                                                 pad_mode=pad_mode, 
+                                                 freeze_parameters=True)
 
         # Logmel feature extractor
         ref = 1.0
         amin = 1e-10
         top_db = None
-        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=n_fft, 
-            n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db)
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
+            n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
         
         # Spec augmenter
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 

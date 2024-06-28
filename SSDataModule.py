@@ -238,7 +238,7 @@ class SSAudioDataModule(L.LightningDataModule):
                     current_split = 'val'
                 elif line.startswith('Test indices and paths:'):
                     current_split = 'test'
-                elif line:
+                elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
                     if current_split:
                         idx, file_path = line.split(': ', 1)
                         file_data = {
@@ -252,11 +252,14 @@ class SSAudioDataModule(L.LightningDataModule):
                             self.val_data.append(file_data)
                         elif current_split == 'test':
                             self.test_data.append(file_data)
-        
-        self.global_min, self.global_max = self.get_min_max_train()
-        self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
-        self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
-        self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+    
+        # Ensure normalization only happens once
+        if not self.prepared:
+            self.global_min, self.global_max = self.get_min_max_train()
+            self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+            self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+            self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+            self.prepared = True
 
 
     def prepare_data(self):

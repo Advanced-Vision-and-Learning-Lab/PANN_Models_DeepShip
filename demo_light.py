@@ -63,55 +63,37 @@ np.object = object  # module 'numpy' has no attribute 'object'
 np.bool = bool  # module 'numpy' has no attribute 'bool'
 
 from KFoldDataModule import AudioDataModule
+from SSDataModule import SSAudioDataModule
+
+
 
 class LitModel(L.LightningModule):
 
-    def __init__(self, HistogramLayer, Params, model_name, num_classes, num_feature_maps, feat_map_size, numBins, Dataset):
+    def __init__(self, Params, model_name, num_classes, Dataset, pretrained_loaded):
         super().__init__()
 
         self.learning_rate = Params['lr']
 
-        # histogram_layer = HistogramLayer(int(num_feature_maps / (feat_map_size * numBins)),
-        #                                  Params['kernel_size'][model_name], dim=1,
-        #                                  num_bins=numBins, stride=Params['stride'],
-        #                                  normalize_count=Params['normalize_count'],
-        #                                  normalize_bins=Params['normalize_bins'])
-
-
-        histogram_layer = HistogramLayer(768,
-                                          Params['kernel_size'][model_name], dim=1,
-                                          num_bins=numBins, stride=Params['stride'],
-                                          normalize_count=Params['normalize_count'],
-                                          normalize_bins=Params['normalize_bins'])
-
-        self.model_ft, input_size, self.feature_extraction_layer, self.ft_dims = initialize_model(model_name, num_classes,
-                                                                                                  Params['in_channels'][model_name],
-                                                                                                  # len(Params['feature']),
-                                                                                                  num_feature_maps,
-                                                                                                  feature_extract=Params[
-                                                                                                      'feature_extraction'],
-                                                                                                  histogram=Params['histogram'],
-                                                                                                  histogram_layer=histogram_layer,
-                                                                                                  parallel=Params['parallel'],
-                                                                                                  use_pretrained=Params[
-                                                                                                      'use_pretrained'],
-                                                                                                  add_bn=Params['add_bn'],
-                                                                                                  scale=Params['scale'],
-                                                                                                  feat_map_size=feat_map_size,
-                                                                                                  TDNN_feats=(
-                                                                                                      Params['TDNN_feats'][Dataset]),
-                                                                                                  input_feature=Params['feature'])
+        self.model_ft, input_size, self.feature_extraction_layer = initialize_model(
+            model_name, 
+            use_pretrained=Params['use_pretrained'], 
+            feature_extract=Params['feature_extraction'], 
+            num_classes=num_classes,
+            pretrained_loaded=pretrained_loaded 
+        )
 
         self.train_acc = torchmetrics.classification.Accuracy(
             task="multiclass", num_classes=num_classes)
         self.val_acc = torchmetrics.classification.Accuracy(
+            task="multiclass", num_classes=num_classes)
+        self.test_acc = torchmetrics.classification.Accuracy(
             task="multiclass", num_classes=num_classes)
 
         self.save_hyperparameters()
         self.first_epoch_time_start = None
 
     def forward(self, x):
-        # in lightning, forward defines the prediction/inference actions
+        # In Lightning, forward defines the prediction/inference actions
         y_feat = self.feature_extraction_layer(x)
         y_pred = self.model_ft(y_feat)
         return y_pred
@@ -123,6 +105,9 @@ class LitModel(L.LightningModule):
         y_pred = self.model_ft(y_feat)
         loss = F.cross_entropy(y_pred, y)
 
+        # Update the train accuracy metric
+        #self.train_acc.update(y_pred, y)
+    
         self.train_acc(y_pred, y)
 
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
@@ -136,7 +121,7 @@ class LitModel(L.LightningModule):
 
     def on_train_epoch_end(self):
         train_acc = self.train_acc.compute()
-        self.log('train_acc', train_acc)
+        self.log('train_acc_epoch', train_acc)
         print(f'Training Accuracy: {train_acc:.4f}')
         self.train_acc.reset()
 
@@ -144,12 +129,14 @@ class LitModel(L.LightningModule):
             epoch_duration = time.time() - self.first_epoch_time_start
             print(f"Duration of the first epoch: {epoch_duration:.2f} seconds")
 
-
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
         y_feat = self.feature_extraction_layer(x)
         y_pred = self.model_ft(y_feat)
         val_loss = F.cross_entropy(y_pred, y)
+    
+        # Update the validation accuracy metric
+        #self.val_acc.update(y_pred, y)
 
         self.val_acc(y_pred, y)
         self.log('val_loss', val_loss, on_step=False, on_epoch=True)
@@ -157,18 +144,49 @@ class LitModel(L.LightningModule):
 
         return val_loss
 
+    # def on_validation_epoch_end(self):
+    #     # Compute and log the validation accuracy only once at the end of the epoch
+    #     val_acc = self.val_acc.compute()
+    #     self.log('val_acc_epoch', val_acc)
+    #     print(f'Validation Accuracy: {val_acc:.4f}')
+    #     self.val_acc.reset()
+
     def on_validation_epoch_end(self):
-        # Compute and log the validation accuracy only once at the end of the epoch
-        val_acc = self.val_acc.compute()
-        self.log('val_acc', val_acc)
-        print(f'Validation Accuracy: {val_acc:.4f}')
-        self.val_acc.reset()
+        # Check if there have been updates before calling compute
+        if self.val_acc._num_updates > 0:
+            val_acc = self.val_acc.compute()
+            self.log('val_acc_epoch', val_acc)
+            print(f'Validation Accuracy: {val_acc:.4f}')
+            self.val_acc.reset()
+
+    def test_step(self, test_batch, batch_idx):
+        x, y = test_batch
+        y_feat = self.feature_extraction_layer(x)
+        y_pred = self.model_ft(y_feat)
+        test_loss = F.cross_entropy(y_pred, y)
+
+
+        # Update the test accuracy metric
+        #self.test_acc.update(y_pred, y)
+    
+        self.test_acc(y_pred, y)
+        self.log('test_loss', test_loss, on_step=False, on_epoch=True)
+        self.log('test_acc', self.test_acc, on_step=False, on_epoch=True)
+
+        return test_loss
+
+    def on_test_epoch_end(self):
+        # Compute and log the test accuracy only once at the end of the epoch
+        test_acc = self.test_acc.compute()
+        self.log('test_acc_epoch', test_acc)
+        print(f'Test Accuracy: {test_acc:.4f}')
+        self.test_acc.reset()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
-    
-# Custom callback to measure and print the training time for one epoch
+
+
 class TimeEpochCallback(Callback):
     def on_epoch_start(self, trainer, pl_module):
         self.start_time = time.time()
@@ -177,7 +195,6 @@ class TimeEpochCallback(Callback):
         end_time = time.time()
         duration = end_time - self.start_time
         print(f"Epoch {trainer.current_epoch} duration: {duration:.2f} seconds")
-
 
 
 
@@ -192,13 +209,6 @@ def main(Params):
     # Number of classes in dataset
     num_classes = Params['num_classes'][Dataset]
 
-    # Number of runs and/or splits for dataset
-    numRuns = Params['Splits'][Dataset]
-
-    # Number of bins and input convolution feature maps after channel-wise pooling
-    numBins = Params['numBins']
-    num_feature_maps = Params['out_channels'][model_name]
-
     # Local area of feature map after histogram layer
     feat_map_size = Params['feat_map_size']
     kernel_size = Params['kernel_size'][model_name]
@@ -209,97 +219,129 @@ def main(Params):
 
     print('\nStarting Experiments...')
     
+    
+    numRuns = 1
     run_number = 0
     seed_everything(run_number, workers=True)
     all_runs_accs = []
-    num_folds = 3
     
     data_dir = Params["data_dir"]  
     new_dir = Params["new_dir"]  
     
     process_data(sample_rate=Params['sample_rate'], segment_length=Params['segment_length'])
+    print("\nDataset sample rate: ", Params['sample_rate'])
+    print("\nModel name: ", model_name)
     
-    data_module = AudioDataModule(new_dir, batch_size=batch_size, num_folds=num_folds)
+    data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
     data_module.prepare_data()
-    data_module.save_fold_indices('kfold_data_split.txt')  
-
+    data_module.save_split_indices('split_indices.txt')
+    
     torch.set_float32_matmul_precision('medium')
-    for run_number in range(0, numRuns-2):
+    all_runs_val_accs = []
+    all_runs_test_accs = []
+
+    for run_number in range(0, numRuns):
+        pretrained_loaded = False
         best_val_accs = []
-        
+        best_test_accs = []
+    
         if run_number != 0:
             seed_everything(run_number, workers=True)
-                 
-        for fold_index in range(num_folds):            
-            print(f'\nStarting Run {run_number}, Fold {fold_index}\n')
+    
+        print(f'\nStarting Run {run_number}\n')
+    
+        checkpoint_callback = ModelCheckpoint(
+            monitor='val_acc',
+            filename='best-{epoch:02d}-{val_acc:.2f}',
+            save_top_k=1,
+            mode='max',
+            verbose=True,
+            save_weights_only=True
+        )
+    
+        early_stopping_callback = EarlyStopping(
+            monitor='val_loss',
+            patience=Params['patience'],
+            verbose=True,
+            mode='min'
+        )
+    
 
-            data_module.set_fold_index(fold_index)
-                        
-            checkpoint_callback = ModelCheckpoint(
-                monitor='val_acc',
-                filename='best-{epoch:02d}-{val_acc:.2f}',
-                save_top_k=1,
-                mode='max',
-                verbose=True,
-                save_weights_only=True
-            )
-
-            early_stopping_callback = EarlyStopping(
-                monitor='val_loss',
-                patience=Params['patience'],
-                verbose=True,
-                mode='min'
-            )
-
-            model_AST = LitModel(HistogramLayer, Params, model_name, num_classes, num_feature_maps,
-                                 feat_map_size, numBins, Dataset)
-
-            if model_AST.ft_dims is not None and len(model_AST.ft_dims) > 1:
-                dim_str = 'x'.join(map(str, model_AST.ft_dims[1:]))
-            else:
-                dim_str = 'unknown_dims'
-
-            logger = TensorBoardLogger(
-                f"tb_logs/{Params['feature']}_b{batch_size}_{Params['Model_name']}/Run_{run_number}",
-                name=f"{Params['Model_name']}_fold_{fold_index}_{dim_str}"
-            )
-
-            trainer = L.Trainer(
-                max_epochs=Params['num_epochs'],
-                callbacks=[early_stopping_callback, checkpoint_callback],
-                deterministic=False,
-                logger=logger
-            )
-
-            trainer.fit(model=model_AST, datamodule=data_module)
-
-            best_val_accs.append(checkpoint_callback.best_model_score.item())
-
+        model_AST = LitModel(
+        Params=Params, 
+        model_name=model_name, 
+        num_classes=num_classes, 
+        Dataset=Dataset, 
+        pretrained_loaded=False  # Indicate that pre-trained weights should be considered
+    )
+    
+    
+        logger = TensorBoardLogger(
+            f"tb_logs/{Params['Model_name']}_b{batch_size}_SS/Run_{run_number}",
+            name=f"{Params['Model_name']}"
+        )
+    
+        trainer = L.Trainer(
+            max_epochs=Params['num_epochs'],
+            callbacks=[early_stopping_callback, checkpoint_callback],
+            deterministic=False,
+            logger=logger
+        )
+    
+        trainer.fit(model=model_AST, datamodule=data_module)
+        
+        best_val_accs.append(checkpoint_callback.best_model_score.item())
+    
+        # Load best model checkpoint for testing
+        best_model_path = checkpoint_callback.best_model_path
+        print(best_model_path)
+        best_model = LitModel.load_from_checkpoint(
+            checkpoint_path=best_model_path, 
+            Params=Params, 
+            model_name=model_name, 
+            num_classes=num_classes, 
+            Dataset=Dataset,
+            pretrained_loaded=True  # Indicate that pre-trained weights should not be reloaded
+        )
+        
+        # Test the best model
+        test_results = trainer.test(model=best_model, datamodule=data_module)
+            
+        best_test_acc = max(result['test_acc'] for result in test_results)
+        best_test_accs.append(best_test_acc)
+    
         average_val_acc = np.mean(best_val_accs)
         std_val_acc = np.std(best_val_accs)
-        all_runs_accs.append(best_val_accs)
-
-        results_filename = f"tb_logs/{Params['feature']}_b{batch_size}_{Params['Model_name']}/Run_{run_number}/{Params['feature']}_{dim_str}.txt"
+        all_runs_val_accs.append(best_val_accs)
+    
+        average_test_acc = np.mean(best_test_accs)
+        std_test_acc = np.std(best_test_accs)
+        all_runs_test_accs.append(best_test_accs)
+    
+        results_filename = f"tb_logs/{Params['Model_name']}_b{batch_size}_SS/Run_{run_number}/{Params['Model_name']}.txt"
         with open(results_filename, "a") as file:
-            file.write(f"Run_{run_number}_{Params['feature']}_{dim_str}\n")
-            file.write(
-                f"Average of Best Validation Accuracy: {average_val_acc:.4f}\n")
-            file.write(
-                f"Standard Deviation of Best Validation Accuracies: {std_val_acc:.4f}\n\n")
-
+            file.write(f"Run_{run_number}\n")
+            file.write(f"Average of Best Validation Accuracy: {average_val_acc:.4f}\n")
+            file.write(f"Standard Deviation of Best Validation Accuracies: {std_val_acc:.4f}\n\n")
+            file.write(f"Average of Best Test Accuracy: {average_test_acc:.4f}\n")
+            file.write(f"Standard Deviation of Best Test Accuracies: {std_test_acc:.4f}\n\n")
+    
     # Flatten the list of lists and compute overall statistics
-    flat_list = [acc for sublist in all_runs_accs for acc in sublist]
-    overall_avg_acc = np.mean(flat_list)
-    overall_std_acc = np.std(flat_list)
-
-    summary_filename = f"tb_logs/{Params['feature']}_b{batch_size}_{Params['Model_name']}/summary_results.txt"
+    flat_val_list = [acc for sublist in all_runs_val_accs for acc in sublist]
+    overall_avg_val_acc = np.mean(flat_val_list)
+    overall_std_val_acc = np.std(flat_val_list)
+    
+    flat_test_list = [acc for sublist in all_runs_test_accs for acc in sublist]
+    overall_avg_test_acc = np.mean(flat_test_list)
+    overall_std_test_acc = np.std(flat_test_list)
+    
+    summary_filename = f"tb_logs/{Params['Model_name']}_b{batch_size}_SS/summary_results.txt"
     with open(summary_filename, "w") as file:
-        file.write(
-            f"Overall Results Across All Runs for {Params['feature']}\n")
-        file.write(
-            f"Overall Average of Best Validation Accuracies: {overall_avg_acc:.4f}\n")
-        file.write(
-            f"Overall Standard Deviation of Best Validation Accuracies: {overall_std_acc:.4f}\n")
+        file.write("Overall Results Across All Runs\n")
+        file.write(f"Overall Average of Best Validation Accuracies: {overall_avg_val_acc:.4f}\n")
+        file.write(f"Overall Standard Deviation of Best Validation Accuracies: {overall_std_val_acc:.4f}\n")
+        file.write(f"Overall Average of Best Test Accuracies: {overall_avg_test_acc:.4f}\n")
+        file.write(f"Overall Standard Deviation of Best Test Accuracies: {overall_std_test_acc:.4f}\n")
 
 
 def parse_args():
@@ -309,7 +351,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='CNN_14',
+    parser.add_argument('--model', type=str, default='CNN_14_16k',
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
@@ -319,7 +361,7 @@ def parse_args():
                         help='Number of bins for histogram layer. Recommended values are 4, 8 and 16. (default: 16)')
     parser.add_argument('--feature_extraction', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag for feature extraction. False, train whole model. True, only update fully connected and histogram layers parameters (default: True)')
-    parser.add_argument('--use_pretrained', default=False, action=argparse.BooleanOptionalAction,
+    parser.add_argument('--use_pretrained', default=True, action=argparse.BooleanOptionalAction,
                         help='Flag to use pretrained model from ImageNet or train from scratch (default: True)')
     parser.add_argument('--train_batch_size', type=int, default=64,
                         help='input batch size for training (default: 128)')

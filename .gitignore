@@ -5,6 +5,7 @@
 Datasets/DeepShip
 tb_logs/
 PANN_Weights/
+features/
 
 # Ignore specific large files
 

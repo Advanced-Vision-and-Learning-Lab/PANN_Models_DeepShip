@@ -59,7 +59,7 @@ class LitModel(L.LightningModule):
 
         self.learning_rate = Params['lr']
 
-        self.model_ft, input_size, self.feature_layer, self.mel_extractor = initialize_model(
+        self.model_ft, input_size, self.mel_extractor = initialize_model(
             model_name, 
             use_pretrained=Params['use_pretrained'], 
             feature_extract=Params['feature_extraction'], 
@@ -83,15 +83,14 @@ class LitModel(L.LightningModule):
     def forward(self, x):
         # Extract mel spectrogram if not PANN model
         x = self.mel_extractor(x)
-        # features using the feature layer
-        
+        # features are from the feature layer (backbone)
         features, y_pred = self.model_ft(x)
         return features, y_pred
 
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
-        features, y_pred = self(x)  # Use the standardized forward method
+        features, y_pred = self(x) 
         loss = F.cross_entropy(y_pred, y)
         
         self.train_acc(y_pred, y)
@@ -151,15 +150,22 @@ class LitModel(L.LightningModule):
         print(f'Test Accuracy: {test_acc:.4f}')
         self.test_acc.reset()
     
-        # Save features and labels
-        self.save_features("test")
+        # Compute and log the F1 score for the test set
+        test_f1 = self.test_f1.compute()
+        self.log('test_f1_epoch', test_f1)
+        print(f'Test F1 Score: {test_f1:.4f}')
+        self.test_f1.reset()    
     
-    def save_features(self, phase):
+        # Save features and labels with model name
+        self.save_features("test", self.hparams.model_name)
+    
+    
+    def save_features(self, phase, model_name):
         # Define file paths to save features, predictions, and labels
         os.makedirs("features", exist_ok=True)
-        features_file_path = f"features/{phase}_features.pth"
-        labels_file_path = f"features/{phase}_labels.pth"
-        preds_file_path = f"features/{phase}_preds.pth"
+        features_file_path = f"features/{model_name}_{phase}_features.pth"
+        labels_file_path = f"features/{model_name}_{phase}_labels.pth"
+        preds_file_path = f"features/{model_name}_{phase}_preds.pth"
     
         # Convert lists to tensors
         features_tensor = torch.cat(self.test_features)
@@ -167,9 +173,7 @@ class LitModel(L.LightningModule):
         preds_tensor = torch.cat(self.test_preds).argmax(dim=1)  # Convert logits to class labels
     
         # Save tensors
-        torch.save({'features': features_tensor, 'labels': labels_tensor}, features_file_path)
-        torch.save(labels_tensor, labels_file_path)
-        torch.save(preds_tensor, preds_file_path)
+        torch.save({'features': features_tensor, 'labels': labels_tensor, 'preds': preds_tensor}, features_file_path)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)

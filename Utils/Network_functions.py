@@ -58,6 +58,29 @@ class CustomPANN(nn.Module):
         return features, predictions
     
     
+class CustomTIMM(nn.Module):
+    def __init__(self, model, feature_layer):
+        super(CustomTIMM, self).__init__()
+        self.feature_layer = feature_layer
+        self.fc = None
+        if 'fc' in dir(model):
+            self.fc = model.fc
+            model.fc = nn.Sequential()
+        elif 'classifier' in dir(model):
+            self.fc = model.classifier
+            model.classifier = nn.Sequential()
+        elif 'head' in dir(model):
+            self.fc = model.head
+            model.head = nn.Sequential()
+        self.backbone = model
+
+    def forward(self, x):
+        features = self.backbone(x)
+        predictions = self.fc(features)
+        return features, predictions
+
+
+    
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
         for param in model.parameters():
@@ -177,7 +200,7 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           num_ftrs = model_ft.fc_audioset.in_features
           model_ft.fc_audioset = nn.Linear(num_ftrs, num_classes)
           custom_model = CustomPANN(model_ft)
-          feature_layer = custom_model.backbone  # Use the backbone as the feature layer
+          #feature_layer = custom_model.backbone  # Use the backbone as the feature layer
           mel_extractor = nn.Sequential()  # Empty for PANN models
           input_size = None # No specific input size for PANN models
     
@@ -194,26 +217,26 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           set_parameter_requires_grad(model_ft, feature_extract)
     
           if 'fc' in dir(model_ft):
-              num_ftrs = model_ft.fc.in_features
-              model_ft.fc = nn.Linear(num_ftrs, num_classes)
+            num_ftrs = model_ft.fc.in_features
+            model_ft.fc = nn.Linear(num_ftrs, num_classes)
           elif 'classifier' in dir(model_ft):
-              num_ftrs = model_ft.classifier.in_features
-              model_ft.classifier = nn.Linear(num_ftrs, num_classes)
+            num_ftrs = model_ft.classifier.in_features
+            model_ft.classifier = nn.Linear(num_ftrs, num_classes)
           elif 'head' in dir(model_ft):
-              num_ftrs = model_ft.head.in_features
-              model_ft.head = nn.Linear(num_ftrs, num_classes)
-    
-          feature_layer = nn.Sequential(*list(model_ft.children())[:-1])  # Backbone as feature layer
-          custom_model = model_ft
-          
-          
+            num_ftrs = model_ft.head.in_features
+            model_ft.head = nn.Linear(num_ftrs, num_classes)
+                    
+        
+          custom_model = CustomTIMM(model_ft, feature_layer=nn.Sequential(*list(model_ft.children())[:-1]))
           mel_extractor = MelSpectrogramExtractor(sample_rate=params['sample_rate'], 
-                                                  win_length=params['window_size'], 
-                                                  hop_length=params['hop_size'], 
-                                                  n_mels=params['mel_bins'], 
-                                                  fmin=params['fmin'], 
-                                                  fmax=params['fmax'])
+                                                    win_length=params['window_size'], 
+                                                    hop_length=params['hop_size'], 
+                                                    n_mels=params['mel_bins'], 
+                                                    fmin=params['fmin'], 
+                                                    fmax=params['fmax'])
 
-    
-    return custom_model, input_size, feature_layer, mel_extractor
+
+    return custom_model, input_size, mel_extractor
+          
+          
 

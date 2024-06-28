@@ -59,7 +59,7 @@ class LitModel(L.LightningModule):
 
         self.learning_rate = Params['lr']
 
-        self.model_ft, input_size, self.mel_extractor = initialize_model(
+        self.model_ft, self.mel_extractor = initialize_model(
             model_name, 
             use_pretrained=Params['use_pretrained'], 
             feature_extract=Params['feature_extraction'], 
@@ -213,9 +213,14 @@ def main(Params):
     print("\nDataset sample rate: ", Params['sample_rate'])
     print("\nModel name: ", model_name, "\n")
     
+    
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
     data_module.prepare_data()
-    data_module.save_split_indices('split_indices.txt')
+
+
+    #data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
+    #data_module.prepare_data()
+    #data_module.save_split_indices('split_indices.txt')
     
     torch.set_float32_matmul_precision('medium')
     all_runs_val_accs = []
@@ -350,7 +355,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='CNN_14_16k',
+    parser.add_argument('--model', type=str, default='DenseNet121',
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

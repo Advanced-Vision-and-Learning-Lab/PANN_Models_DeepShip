@@ -23,26 +23,43 @@ import requests
 from Utils.PANN_models import Cnn14, ResNet38, MobileNetV1, Res1dNet31, Wavegram_Logmel_Cnn14  
 import timm
 
-from nnAudio.features import MelSpectrogram
+#from nnAudio.features import MelSpectrogram
 
-class MelSpectrogramExtractor(nn.Module):
+from torchaudio.transforms import MelSpectrogram
+from torchlibrosa.stft import Spectrogram, LogmelFilterBank
+from torchlibrosa.augmentation import SpecAugmentation
+
+
+class MelSpectrogramExtractor(nn.Module): 
     def __init__(self, sample_rate=16000, n_fft=1024, win_length=512, hop_length=160, n_mels=64, fmin=50, fmax=8000):
         super(MelSpectrogramExtractor, self).__init__()
-        self.mel_spectrogram = MelSpectrogram(
-            sr=sample_rate,
-            n_fft=n_fft,
-            win_length=win_length,
-            hop_length=hop_length,
-            n_mels=n_mels,
-            fmin=fmin,
-            fmax=fmax
-        )
+        
+        # Settings for Spectrogram
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        
+        # Ensure this n_fft matches across all relevant uses
+        self.spectrogram_extractor = Spectrogram(n_fft=n_fft, hop_length=hop_length, 
+                                                 win_length=win_length, window=window, center=center, 
+                                                 pad_mode=pad_mode, power=2.0)
 
+        # Logmel feature extractor
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=n_fft, 
+            n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db)
+        
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+        
     def forward(self, waveform):
-        mel_spectrogram = self.mel_spectrogram(waveform)
-        log_mel_spectrogram = torch.log(mel_spectrogram + 1e-6)
-        return log_mel_spectrogram
-
+        spectrogram = self.spectrogram_extractor(waveform)
+        log_mel_spectrogram = self.logmel_extractor(spectrogram)
+        augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+        return augmented_log_mel_spectrogram
 
 
 class CustomPANN(nn.Module):
@@ -75,12 +92,13 @@ class CustomTIMM(nn.Module):
         self.backbone = model
 
     def forward(self, x):
+        #pdb.set_trace()
         features = self.backbone(x)
         predictions = self.fc(features)
         return features, predictions
 
-
     
+
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
         for param in model.parameters():
@@ -143,28 +161,23 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
         },
         'EfficientNet-B0': {
             'class': 'efficientnet_b0',
-            'pretrained': True,
-            'input_size': 224
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000,
         },
         'ResNet50': {
             'class': 'resnet50',
-            'pretrained': True,
-            'input_size': 224
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000,
         },
         'ViT-B/16': {
             'class': 'vit_base_patch16_224',
-            'pretrained': True,
-            'input_size': 224
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000,
         },
         'DenseNet121': {
             'class': 'densenet121',
-            'pretrained': True,
-            'input_size': 224
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000,
         },
-        'ConvNext-Tiny': {
-            'class': 'convnext_tiny',
-            'pretrained': True,
-            'input_size': 224
+        'convnextv2_tiny': {
+            'class': 'convnextv2_tiny', 
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000,
         }
     }
 
@@ -200,19 +213,17 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           num_ftrs = model_ft.fc_audioset.in_features
           model_ft.fc_audioset = nn.Linear(num_ftrs, num_classes)
           custom_model = CustomPANN(model_ft)
-          #feature_layer = custom_model.backbone  # Use the backbone as the feature layer
-          mel_extractor = nn.Sequential()  # Empty for PANN models
-          input_size = None # No specific input size for PANN models
+          mel_extractor = nn.Sequential() 
+
     
     else:
           # TIMM models
           model_class = params['class']
-          input_size = params['input_size']
     
           if use_pretrained and not pretrained_loaded:
-              model_ft = timm.create_model(model_class, pretrained=True)
+              model_ft = timm.create_model(model_class, pretrained=True, in_chans=1)
           else:
-              model_ft = timm.create_model(model_class, pretrained=False)
+              model_ft = timm.create_model(model_class, pretrained=False, in_chans=1)
     
           set_parameter_requires_grad(model_ft, feature_extract)
     
@@ -228,6 +239,8 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
                     
         
           custom_model = CustomTIMM(model_ft, feature_layer=nn.Sequential(*list(model_ft.children())[:-1]))
+          
+          
           mel_extractor = MelSpectrogramExtractor(sample_rate=params['sample_rate'], 
                                                     win_length=params['window_size'], 
                                                     hop_length=params['hop_size'], 
@@ -236,7 +249,7 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
                                                     fmax=params['fmax'])
 
 
-    return custom_model, input_size, mel_extractor
-          
-          
 
+    return custom_model, mel_extractor
+          
+          

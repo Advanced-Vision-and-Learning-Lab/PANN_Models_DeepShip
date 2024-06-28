@@ -21,7 +21,11 @@ class SSAudioDataset(Dataset):
     def __init__(self, data_list, class_to_idx):
         self.data_list = data_list  # Store the list of data
         self.class_to_idx = class_to_idx  # Store the class-to-index mapping
-
+        
+        
+        #read txt file for train val test
+        
+        
     def __len__(self):
         return len(self.data_list)  # Return the number of samples
 
@@ -218,24 +222,90 @@ class SSAudioDataModule(L.LightningDataModule):
                 f.write(f'{idx}: {file_data["file_path"]}\n')
 
 
+    def load_split_indices(self, filepath):
+        print("\nLoading split indices")
+        self.train_data = []
+        self.val_data = []
+        self.test_data = []
+        
+        current_split = None
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('Train indices and paths:'):
+                    current_split = 'train'
+                elif line.startswith('Validation indices and paths:'):
+                    current_split = 'val'
+                elif line.startswith('Test indices and paths:'):
+                    current_split = 'test'
+                elif line:
+                    if current_split:
+                        idx, file_path = line.split(': ', 1)
+                        file_data = {
+                            'file_path': file_path,
+                            'sampling_rate': 16000,  # Assuming a fixed sampling rate; adjust as necessary
+                            'data': wavfile.read(file_path)[1]  # Read the data from the file path
+                        }
+                        if current_split == 'train':
+                            self.train_data.append(file_data)
+                        elif current_split == 'val':
+                            self.val_data.append(file_data)
+                        elif current_split == 'test':
+                            self.test_data.append(file_data)
+        
+        self.global_min, self.global_max = self.get_min_max_train()
+        self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+        self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+        self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+
+
     def prepare_data(self):
-        if not self.prepared:
-            self.wav_files = self.list_wav_files()
-            self.data_list = self.read_wav_files(self.wav_files)
-            self.organized_data = self.organize_data(self.data_list)
-            self.train_data, self.val_data, self.test_data = self.create_splits(self.organized_data)
-            self.check_data_leakage()
-            self.print_class_distribution()
+        split_indices_path = 'split_indices.txt'
+
+        if os.path.exists(split_indices_path):
+            if not self.prepared:  # Check if already prepared to avoid redundant loading
+                print(f'Preparing split indices from {split_indices_path}')
+                self.load_split_indices(split_indices_path)
+                self.prepared = True  
+                    
+        else:
+            if not self.prepared:
+                self.wav_files = self.list_wav_files()
+                self.data_list = self.read_wav_files(self.wav_files)
+                self.organized_data = self.organize_data(self.data_list)
+                self.train_data, self.val_data, self.test_data = self.create_splits(self.organized_data)
+                self.check_data_leakage()
+                self.print_class_distribution()
+                
+                # Get global min and max values from training data
+                self.global_min, self.global_max = self.get_min_max_train()
+                
+                # Normalize train, validation, and test data using the global min and max
+                self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+                self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+                self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+                
+                self.save_split_indices(split_indices_path)  # Save the split indices
+                self.prepared = True
+
+    # def prepare_data(self):
+    #     if not self.prepared:
+    #         self.wav_files = self.list_wav_files()
+    #         self.data_list = self.read_wav_files(self.wav_files)
+    #         self.organized_data = self.organize_data(self.data_list)
+    #         self.train_data, self.val_data, self.test_data = self.create_splits(self.organized_data)
+    #         self.check_data_leakage()
+    #         self.print_class_distribution()
             
-            # Get global min and max values from training data
-            self.global_min, self.global_max = self.get_min_max_train()
+    #         # Get global min and max values from training data
+    #         self.global_min, self.global_max = self.get_min_max_train()
             
-            # Normalize train, validation, and test data using the global min and max
-            self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
-            self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
-            self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+    #         # Normalize train, validation, and test data using the global min and max
+    #         self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+    #         self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+    #         self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
             
-            self.prepared = True
+    #         self.prepared = True
     
     def setup(self, stage=None):
         pass

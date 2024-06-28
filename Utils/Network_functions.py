@@ -37,6 +37,20 @@ def set_parameter_requires_grad(model, feature_extracting):
         for param in model.parameters():
             param.requires_grad = False
 
+
+# class CustomPANN(nn.Module):
+#     def __init__(self, model):
+#         super(CustomPANN, self).__init__()
+#         self.fc = model.fc_audioset
+#         model.fc_audioset = nn.Sequential()
+#         self.backbone = model
+
+#     def forward(self, x):
+#         x = self.backbone(x)
+#         features = x
+#         x = self.fc(x)
+#         return features, x  # Return both features and final output
+
 class CustomPANN(nn.Module):
     def __init__(self, model):
         super(CustomPANN, self).__init__()
@@ -45,9 +59,10 @@ class CustomPANN(nn.Module):
         self.backbone = model
 
     def forward(self, x):
-        x = self.backbone(x)
-        x = self.fc(x)
-        return x
+        features = self.backbone(x)
+        predictions = self.fc(features)
+        return features, predictions
+
 
 def download_weights(url, destination):
     if not os.path.exists(destination):
@@ -139,9 +154,9 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
         fmin = params['fmin']
         fmax = params['fmax']
         weights_path = f"./PANN_Weights/{model_name}_weights.pth"
-        
+
         model_ft = model_class(sample_rate=sample_rate, window_size=window_size, hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, classes_num=527)
-        
+
         if use_pretrained and not pretrained_loaded:
             if not os.path.exists(weights_path) or os.path.getsize(weights_path) == 0:
                 download_weights(weights_url, weights_path)
@@ -155,32 +170,35 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
         num_ftrs = model_ft.fc_audioset.in_features
         model_ft.fc_audioset = nn.Linear(num_ftrs, num_classes)
         custom_model = CustomPANN(model_ft)
-        feature_layer = nn.Sequential()
+        feature_layer = custom_model.backbone  # Use the backbone as the feature extraction layer
 
     else:
         # Logic for TIMM models
         model_class = params['class']
         input_size = params['input_size']
-        
+
         if use_pretrained and not pretrained_loaded:
             model_ft = timm.create_model(model_class, pretrained=True)
         else:
             model_ft = timm.create_model(model_class, pretrained=False)
 
         set_parameter_requires_grad(model_ft, feature_extract)
-        
+
         if 'fc' in dir(model_ft):
             num_ftrs = model_ft.fc.in_features
+            feature_layer = nn.Sequential(*list(model_ft.children())[:-1])  # Set the entire model minus the final layer as the feature extraction layer
             model_ft.fc = nn.Linear(num_ftrs, num_classes)
         elif 'classifier' in dir(model_ft):
             num_ftrs = model_ft.classifier.in_features
+            feature_layer = nn.Sequential(*list(model_ft.children())[:-1])
             model_ft.classifier = nn.Linear(num_ftrs, num_classes)
         elif 'head' in dir(model_ft):
             num_ftrs = model_ft.head.in_features
+            feature_layer = nn.Sequential(*list(model_ft.children())[:-1])
             model_ft.head = nn.Linear(num_ftrs, num_classes)
 
+
         custom_model = model_ft
-        feature_layer = nn.Sequential()
 
     return custom_model, input_size, feature_layer
 

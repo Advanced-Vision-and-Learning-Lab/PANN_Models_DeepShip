@@ -23,10 +23,8 @@ from Utils.Save_Results import save_results
 from Utils.Get_Optimizer import get_optimizer
 from Demo_Parameters import Parameters
 
-# from Prepare_Data import Prepare_DataLoaders
-# from Prepare_Data import read_wav_files, organize_data, create_stratified_k_folds,get_min_max_train
-# from Prepare_Data import list_wav_files, count_samples_per_class, check_data_leakage
-#from Datasets.DeepShipSegments import DeepShipSegments
+from confusion_matrix_util import plot_confusion_matrix
+
 
 from Utils.TDNN import TDNN
 import torch.nn.functional as F
@@ -65,6 +63,8 @@ np.bool = bool  # module 'numpy' has no attribute 'bool'
 from KFoldDataModule import AudioDataModule
 from SSDataModule import SSAudioDataModule
 
+from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
+from torchmetrics.classification import F1Score
 
 
 class LitModel(L.LightningModule):
@@ -82,38 +82,38 @@ class LitModel(L.LightningModule):
             pretrained_loaded=pretrained_loaded 
         )
 
-        self.train_acc = torchmetrics.classification.Accuracy(
-            task="multiclass", num_classes=num_classes)
-        self.val_acc = torchmetrics.classification.Accuracy(
-            task="multiclass", num_classes=num_classes)
-        self.test_acc = torchmetrics.classification.Accuracy(
-            task="multiclass", num_classes=num_classes)
-
         self.save_hyperparameters()
         self.first_epoch_time_start = None
+        
+        self.test_preds = []
+        self.test_labels = []
+        self.test_features = []
+
+        # Initialize accuracy metrics
+        self.train_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
+        self.val_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_f1 = F1Score(task="multiclass", num_classes=num_classes)
+
 
     def forward(self, x):
-        # In Lightning, forward defines the prediction/inference actions
-        y_feat = self.feature_extraction_layer(x)
-        y_pred = self.model_ft(y_feat)
-        return y_pred
-
+        # Extract features using the feature extraction layer
+        features = self.feature_extraction_layer(x)
+        # Get the final predictions
+        features, y_pred = self.model_ft(features)
+        return features, y_pred
+    
     def training_step(self, train_batch, batch_idx):
-        # training_step defines the train loop. It is independent of forward
         x, y = train_batch
-        y_feat = self.feature_extraction_layer(x)
-        y_pred = self.model_ft(y_feat)
+        features, y_pred = self(x)  # Use the standardized forward method
         loss = F.cross_entropy(y_pred, y)
-
-        # Update the train accuracy metric
-        #self.train_acc.update(y_pred, y)
     
         self.train_acc(y_pred, y)
-
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('loss', loss, on_step=True, on_epoch=True)
-
+    
         return loss
+    
 
     def on_train_epoch_start(self):
         if self.current_epoch == 0:
@@ -131,25 +131,14 @@ class LitModel(L.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
-        y_feat = self.feature_extraction_layer(x)
-        y_pred = self.model_ft(y_feat)
+        features, y_pred = self(x)
         val_loss = F.cross_entropy(y_pred, y)
     
-        # Update the validation accuracy metric
-        #self.val_acc.update(y_pred, y)
-
         self.val_acc(y_pred, y)
         self.log('val_loss', val_loss, on_step=False, on_epoch=True)
         self.log('val_acc', self.val_acc, on_step=False, on_epoch=True)
-
+    
         return val_loss
-
-    # def on_validation_epoch_end(self):
-    #     # Compute and log the validation accuracy only once at the end of the epoch
-    #     val_acc = self.val_acc.compute()
-    #     self.log('val_acc_epoch', val_acc)
-    #     print(f'Validation Accuracy: {val_acc:.4f}')
-    #     self.val_acc.reset()
 
     def on_validation_epoch_end(self):
         # Check if there have been updates before calling compute
@@ -158,29 +147,55 @@ class LitModel(L.LightningModule):
             self.log('val_acc_epoch', val_acc)
             print(f'Validation Accuracy: {val_acc:.4f}')
             self.val_acc.reset()
-
+ 
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
-        y_feat = self.feature_extraction_layer(x)
-        y_pred = self.model_ft(y_feat)
+        features, y_pred = self(x)
         test_loss = F.cross_entropy(y_pred, y)
-
-
-        # Update the test accuracy metric
-        #self.test_acc.update(y_pred, y)
     
         self.test_acc(y_pred, y)
+        self.test_f1(y_pred, y)  # Update F1 score
+    
         self.log('test_loss', test_loss, on_step=False, on_epoch=True)
         self.log('test_acc', self.test_acc, on_step=False, on_epoch=True)
-
+        self.log('test_f1', self.test_f1, on_step=False, on_epoch=True)  # Log F1 score
+    
+        # Store predictions, true labels, and features
+        self.test_preds.append(y_pred.cpu())
+        self.test_labels.append(y.cpu())
+        self.test_features.append(features.cpu())
+    
         return test_loss
-
+    
     def on_test_epoch_end(self):
         # Compute and log the test accuracy only once at the end of the epoch
         test_acc = self.test_acc.compute()
         self.log('test_acc_epoch', test_acc)
         print(f'Test Accuracy: {test_acc:.4f}')
         self.test_acc.reset()
+    
+        # Save features and labels
+        self.save_features("test")
+    
+    def save_features(self, phase):
+        # Define file paths to save features and labels
+        os.makedirs("features", exist_ok=True)
+        features_file_path = f"features/{phase}_features.pth"
+        labels_file_path = f"features/{phase}_labels.pth"
+    
+        # Convert lists to tensors
+        features_tensor = torch.cat(self.validation_features if phase == "validation" else self.test_features)
+        labels_tensor = torch.cat(self.validation_labels if phase == "validation" else self.test_labels)
+    
+        # Save tensors
+        torch.save({'features': features_tensor, 'labels': labels_tensor}, features_file_path)
+        print(f"Saved {phase} features to {features_file_path}")
+    
+    def compute_test_f1(self):
+        # Compute and log the F1 score for the test set
+        test_f1 = self.test_f1.compute()  # Compute F1 score
+        print(f'Test F1 Score: {test_f1:.4f}')  # Print F1 score
+        self.test_f1.reset()  # Reset F1 score
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -195,7 +210,6 @@ class TimeEpochCallback(Callback):
         end_time = time.time()
         duration = end_time - self.start_time
         print(f"Epoch {trainer.current_epoch} duration: {duration:.2f} seconds")
-
 
 
 def main(Params):
@@ -239,12 +253,12 @@ def main(Params):
     torch.set_float32_matmul_precision('medium')
     all_runs_val_accs = []
     all_runs_test_accs = []
-
+    all_runs_test_f1s = []  # Initialize list to store F1 scores
     for run_number in range(0, numRuns):
         pretrained_loaded = False
         best_val_accs = []
         best_test_accs = []
-    
+        best_test_f1s = []  # Initialize list for best F1 scores
         if run_number != 0:
             seed_everything(run_number, workers=True)
     
@@ -306,7 +320,10 @@ def main(Params):
         
         # Test the best model
         test_results = trainer.test(model=best_model, datamodule=data_module)
-            
+
+        best_test_f1 = best_model.compute_test_f1()  # Compute and log the test F1 score
+        best_test_f1s.append(best_test_f1)
+          
         best_test_acc = max(result['test_acc'] for result in test_results)
         best_test_accs.append(best_test_acc)
     
@@ -318,6 +335,12 @@ def main(Params):
         std_test_acc = np.std(best_test_accs)
         all_runs_test_accs.append(best_test_accs)
     
+    
+        average_test_f1 = np.mean(best_test_f1s)
+        std_test_f1 = np.std(best_test_f1s)
+        all_runs_test_f1s.append(best_test_f1s)   
+            
+
         results_filename = f"tb_logs/{Params['Model_name']}_b{batch_size}_SS/Run_{run_number}/{Params['Model_name']}.txt"
         with open(results_filename, "a") as file:
             file.write(f"Run_{run_number}\n")
@@ -325,6 +348,8 @@ def main(Params):
             file.write(f"Standard Deviation of Best Validation Accuracies: {std_val_acc:.4f}\n\n")
             file.write(f"Average of Best Test Accuracy: {average_test_acc:.4f}\n")
             file.write(f"Standard Deviation of Best Test Accuracies: {std_test_acc:.4f}\n\n")
+            file.write(f"Average of Best Test F1 Score: {average_test_f1:.4f}\n")
+            file.write(f"Standard Deviation of Best Test F1 Scores: {std_test_f1:.4f}\n\n")
     
     # Flatten the list of lists and compute overall statistics
     flat_val_list = [acc for sublist in all_runs_val_accs for acc in sublist]
@@ -334,6 +359,10 @@ def main(Params):
     flat_test_list = [acc for sublist in all_runs_test_accs for acc in sublist]
     overall_avg_test_acc = np.mean(flat_test_list)
     overall_std_test_acc = np.std(flat_test_list)
+
+    flat_test_f1_list = [f1 for sublist in all_runs_test_f1s for f1 in sublist]
+    overall_avg_test_f1 = np.mean(flat_test_f1_list)
+    overall_std_test_f1 = np.std(flat_test_f1_list)
     
     summary_filename = f"tb_logs/{Params['Model_name']}_b{batch_size}_SS/summary_results.txt"
     with open(summary_filename, "w") as file:
@@ -342,6 +371,9 @@ def main(Params):
         file.write(f"Overall Standard Deviation of Best Validation Accuracies: {overall_std_val_acc:.4f}\n")
         file.write(f"Overall Average of Best Test Accuracies: {overall_avg_test_acc:.4f}\n")
         file.write(f"Overall Standard Deviation of Best Test Accuracies: {overall_std_test_acc:.4f}\n")
+        file.write(f"Overall Average of Best Test F1 Scores: {overall_avg_test_f1:.4f}\n")
+        file.write(f"Overall Standard Deviation of Best Test F1 Scores: {overall_std_test_f1:.4f}\n")
+
 
 
 def parse_args():

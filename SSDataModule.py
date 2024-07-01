@@ -11,17 +11,15 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
-from sklearn.model_selection import StratifiedKFold
 from scipy.io import wavfile
 import lightning as L
 from sklearn.model_selection import StratifiedShuffleSplit
-
+import librosa
 
 class SSAudioDataset(Dataset):
     def __init__(self, data_list, class_to_idx):
         self.data_list = data_list  # Store the list of data
         self.class_to_idx = class_to_idx  # Store the class-to-index mapping
-        
         
     def __len__(self):
         return len(self.data_list)  # Return the number of samples
@@ -37,7 +35,7 @@ class SSAudioDataset(Dataset):
 
 
 class SSAudioDataModule(L.LightningDataModule):
-    def __init__(self, data_dir, batch_size=256, test_size=0.2, val_size=0.1):
+    def __init__(self, data_dir, batch_size, sample_rate, test_size=0.2, val_size=0.1):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -45,6 +43,7 @@ class SSAudioDataModule(L.LightningDataModule):
         self.val_size = val_size
         self.class_to_idx = {'Cargo': 0, 'Passengership': 1, 'Tanker': 2, 'Tug': 3}
         self.prepared = False
+        self.sample_rate = sample_rate
 
     def list_wav_files(self):
         wav_files = []
@@ -74,6 +73,7 @@ class SSAudioDataModule(L.LightningDataModule):
         print(f'Read {len(data_list)} .wav files')
         return data_list
 
+
     def organize_data(self, data_list):
         organized_data = defaultdict(lambda: defaultdict(list))
         for file_data in data_list:
@@ -93,11 +93,11 @@ class SSAudioDataModule(L.LightningDataModule):
                 all_recording_names.append((class_name, recording_name))
                 class_labels.append(class_name)
 
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=self.test_size + self.val_size, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=self.test_size + self.val_size, random_state=42)
         train_index, temp_index = next(sss.split(all_recording_names, class_labels))
 
         val_test_size = self.val_size / (self.test_size + self.val_size)
-        sss_temp = StratifiedShuffleSplit(n_splits=1, test_size=val_test_size, random_state=0)
+        sss_temp = StratifiedShuffleSplit(n_splits=1, test_size=val_test_size, random_state=42)
         val_index, test_index = next(sss_temp.split(np.array(all_recording_names)[temp_index], np.array(class_labels)[temp_index]))
 
         train_data, val_data, test_data = [], [], []
@@ -114,7 +114,7 @@ class SSAudioDataModule(L.LightningDataModule):
             class_name, recording_name = all_recording_names[temp_index[idx]]
             test_data.extend(organized_data[class_name][recording_name])
 
-        print(f'Created train, validation, and test splits')
+        print('Created train, validation, and test splits')
         return train_data, val_data, test_data
 
     def check_data_leakage(self):
@@ -122,9 +122,6 @@ class SSAudioDataModule(L.LightningDataModule):
 
         all_data = self.train_data + self.val_data + self.test_data
         flattened_data = [item for sublist in all_data for item in (sublist if isinstance(sublist, list) else [sublist])]
-
-        # Debugging: print the structure of flattened_data
-        #print("Sample of flattened_data structure:", flattened_data[0] if flattened_data else "No data")
 
         # Ensure flattened_data is a list of dictionaries with 'file_path' key
         if not isinstance(flattened_data, list):
@@ -157,23 +154,58 @@ class SSAudioDataModule(L.LightningDataModule):
             class_name = file_data['file_path'].split(os.sep)[-3]
             class_counts[class_name] += 1
         return class_counts
-
+  
+            
     def print_class_distribution(self):
         print('Train set class distribution:')
         train_class_counts = self.count_samples_per_class(self.train_data)
+        train_recording_counts = defaultdict(set)  
+    
+        for file_data in self.train_data:
+            class_name = file_data['file_path'].split(os.sep)[-3]
+            recording_name = file_data['file_path'].split(os.sep)[-2]
+            train_recording_counts[class_name].add(recording_name)  # Add recording names to sets
+    
         for class_name, count in train_class_counts.items():
-            print(f'  {class_name}: {count}')
-
+            print(f'  {class_name}: {count} samples, {len(train_recording_counts[class_name])} recordings')
+    
         print('Validation set class distribution:')
         val_class_counts = self.count_samples_per_class(self.val_data)
+        val_recording_counts = defaultdict(set)
+    
+        for file_data in self.val_data:
+            class_name = file_data['file_path'].split(os.sep)[-3]
+            recording_name = file_data['file_path'].split(os.sep)[-2]
+            val_recording_counts[class_name].add(recording_name)
+    
         for class_name, count in val_class_counts.items():
-            print(f'  {class_name}: {count}')
-
+            print(f'  {class_name}: {count} samples, {len(val_recording_counts[class_name])} recordings')
+    
         print('Test set class distribution:')
         test_class_counts = self.count_samples_per_class(self.test_data)
+        test_recording_counts = defaultdict(set)
+    
+        for file_data in self.test_data:
+            class_name = file_data['file_path'].split(os.sep)[-3]
+            recording_name = file_data['file_path'].split(os.sep)[-2]
+            test_recording_counts[class_name].add(recording_name)
+    
         for class_name, count in test_class_counts.items():
-            print(f'  {class_name}: {count}')
+            print(f'  {class_name}: {count} samples, {len(test_recording_counts[class_name])} recordings')
+    
+        # Calculate total counts across all splits
+        total_class_counts = {}
+        total_recording_counts = defaultdict(set)
+        for class_name in set(train_recording_counts.keys()).union(val_recording_counts.keys()).union(test_recording_counts.keys()):
+            total_sample_count = train_class_counts.get(class_name, 0) + val_class_counts.get(class_name, 0) + test_class_counts.get(class_name, 0)
+            total_class_counts[class_name] = total_sample_count
+            total_recording_counts[class_name] = train_recording_counts[class_name].union(val_recording_counts[class_name]).union(test_recording_counts[class_name])
+    
+        print('Total samples and recordings per class:')
+        for class_name in total_class_counts:
+            print(f'  {class_name}: {total_class_counts[class_name]} samples, {len(total_recording_counts[class_name])} recordings')
 
+            
     def get_min_max_train(self):
         global_min = float('inf')
         global_max = float('-inf')
@@ -188,7 +220,7 @@ class SSAudioDataModule(L.LightningDataModule):
         return global_min, global_max
 
     def normalize_data(self, data_list, global_min, global_max):
-        print("Normalizing train/val/test")
+        print("\nNormalizing train/val/test")
         normalized_data_list = []
         global_min = np.float32(global_min)
         global_max = np.float32(global_max)
@@ -204,7 +236,7 @@ class SSAudioDataModule(L.LightningDataModule):
         return normalized_data_list
 
     def save_split_indices(self, filepath):
-        print("\nSaving split indices")
+        print("\nSaving split indices...")
         with open(filepath, 'w') as f:
             f.write('Train indices and paths:\n')
             for idx, file_data in enumerate(self.train_data):
@@ -219,12 +251,13 @@ class SSAudioDataModule(L.LightningDataModule):
                 f.write(f'{idx}: {file_data["file_path"]}\n')
 
 
-    def load_split_indices(self, filepath):
-        print("\nLoading split indices")
+    def load_split_indices(self, filepath, t_rate):
+        print("\nLoading split indices from the saved file...\n")
         self.train_data = []
         self.val_data = []
         self.test_data = []
         
+        first_file = True  # Flag to check if it's the first file being processed
         current_split = None
         with open(filepath, 'r') as f:
             for line in f:
@@ -238,9 +271,18 @@ class SSAudioDataModule(L.LightningDataModule):
                 elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
                     if current_split:
                         idx, file_path = line.split(': ', 1)
-                        sampling_rate, data = wavfile.read(file_path)  
+                        # Adjust the file path to include the correct sampling rate
+                        parts = file_path.split('/')
+                        parts[3] = f'Segments_5s_{t_rate}hz'  # Adjust the directory to reflect the target sampling rate
+                        adjusted_file_path = '/'.join(parts)
+                        sampling_rate, data = wavfile.read(adjusted_file_path)
+                        
+                        if first_file:
+                            print(f"Sample rate of the data: {sampling_rate} Hz")
+                            first_file = False  
+                        
                         file_data = {
-                            'file_path': file_path,
+                            'file_path': adjusted_file_path,
                             'sampling_rate': sampling_rate,
                             'data': data
                         }
@@ -251,13 +293,55 @@ class SSAudioDataModule(L.LightningDataModule):
                         elif current_split == 'test':
                             self.test_data.append(file_data)
 
-        if not self.prepared:
-            self.global_min, self.global_max = self.get_min_max_train()
-            self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
-            self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
-            self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
-            self.prepared = True
-            self.check_data_leakage()
+        #if not self.prepared:
+        self.check_data_leakage()
+        self.print_class_distribution()
+        self.global_min, self.global_max = self.get_min_max_train()
+        self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+        self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+        self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+        self.prepared = True
+
+    # def load_split_indices(self, filepath):
+    #     print("\nLoading split indices from the saved file...\n")
+    #     self.train_data = []
+    #     self.val_data = []
+    #     self.test_data = []
+        
+    #     current_split = None
+    #     with open(filepath, 'r') as f:
+    #         for line in f:
+    #             line = line.strip()
+    #             if line.startswith('Train indices and paths:'):
+    #                 current_split = 'train'
+    #             elif line.startswith('Validation indices and paths:'):
+    #                 current_split = 'val'
+    #             elif line.startswith('Test indices and paths:'):
+    #                 current_split = 'test'
+    #             elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
+    #                 if current_split:
+    #                     idx, file_path = line.split(': ', 1)
+    #                     sampling_rate, data = wavfile.read(file_path)  
+    #                     file_data = {
+    #                         'file_path': file_path,
+    #                         'sampling_rate': sampling_rate,
+    #                         'data': data
+    #                     }
+    #                     if current_split == 'train':
+    #                         self.train_data.append(file_data)
+    #                     elif current_split == 'val':
+    #                         self.val_data.append(file_data)
+    #                     elif current_split == 'test':
+    #                         self.test_data.append(file_data)
+
+    #     #if not self.prepared:
+    #     self.check_data_leakage()
+    #     self.print_class_distribution()
+    #     self.global_min, self.global_max = self.get_min_max_train()
+    #     self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
+    #     self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
+    #     self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
+    #     self.prepared = True
 
 
     def prepare_data(self):
@@ -265,28 +349,25 @@ class SSAudioDataModule(L.LightningDataModule):
 
         if os.path.exists(split_indices_path):
             if not self.prepared:  # Check if already prepared to avoid redundant loading
-                print(f'Preparing split indices from {split_indices_path}')
-                self.load_split_indices(split_indices_path)
-                self.prepared = True  
-                    
+                self.load_split_indices(split_indices_path, t_rate=self.sample_rate)
+                self.prepared = True                      
         else:
             if not self.prepared:
                 self.wav_files = self.list_wav_files()
                 self.data_list = self.read_wav_files(self.wav_files)
                 self.organized_data = self.organize_data(self.data_list)
                 self.train_data, self.val_data, self.test_data = self.create_splits(self.organized_data)
+                
                 self.check_data_leakage()
                 self.print_class_distribution()
-                
-                # Get global min and max values from training data
-                self.global_min, self.global_max = self.get_min_max_train()
-                
-                # Normalize train, validation, and test data using the global min and max
+
+                self.global_min, self.global_max = self.get_min_max_train()        
                 self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
                 self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
                 self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
                 
-                self.save_split_indices(split_indices_path)  # Save the split indices
+                self.save_split_indices(split_indices_path)  
+                
                 self.prepared = True
 
     

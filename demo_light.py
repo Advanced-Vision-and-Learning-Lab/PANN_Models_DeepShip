@@ -45,7 +45,7 @@ np.int = int  # module 'numpy' has no attribute 'int'
 np.object = object  # module 'numpy' has no attribute 'object'
 np.bool = bool  # module 'numpy' has no attribute 'bool'
 
-from KFoldDataModule import AudioDataModule
+
 from SSDataModule import SSAudioDataModule
 
 from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
@@ -69,7 +69,7 @@ def main(Params):
 
     print('\nStarting Experiments...')
     
-    numRuns = 3
+    numRuns = 1
     run_number = 0
     seed_everything(run_number+1, workers=True)
 
@@ -81,7 +81,7 @@ def main(Params):
     print("\nModel name: ", model_name, "\n")
     
     
-    data_module = SSAudioDataModule(new_dir, batch_size=batch_size)
+    data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
 
 

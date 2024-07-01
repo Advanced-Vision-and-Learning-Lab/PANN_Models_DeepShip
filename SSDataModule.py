@@ -23,9 +23,6 @@ class SSAudioDataset(Dataset):
         self.class_to_idx = class_to_idx  # Store the class-to-index mapping
         
         
-        #read txt file for train val test
-        
-        
     def __len__(self):
         return len(self.data_list)  # Return the number of samples
 
@@ -241,10 +238,11 @@ class SSAudioDataModule(L.LightningDataModule):
                 elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
                     if current_split:
                         idx, file_path = line.split(': ', 1)
+                        sampling_rate, data = wavfile.read(file_path)  
                         file_data = {
                             'file_path': file_path,
-                            'sampling_rate': 16000,  # Assuming a fixed sampling rate; adjust as necessary
-                            'data': wavfile.read(file_path)[1]  # Read the data from the file path
+                            'sampling_rate': sampling_rate,
+                            'data': data
                         }
                         if current_split == 'train':
                             self.train_data.append(file_data)
@@ -252,14 +250,14 @@ class SSAudioDataModule(L.LightningDataModule):
                             self.val_data.append(file_data)
                         elif current_split == 'test':
                             self.test_data.append(file_data)
-    
-        # Ensure normalization only happens once
+
         if not self.prepared:
             self.global_min, self.global_max = self.get_min_max_train()
             self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
             self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
             self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
             self.prepared = True
+            self.check_data_leakage()
 
 
     def prepare_data(self):
@@ -291,24 +289,6 @@ class SSAudioDataModule(L.LightningDataModule):
                 self.save_split_indices(split_indices_path)  # Save the split indices
                 self.prepared = True
 
-    # def prepare_data(self):
-    #     if not self.prepared:
-    #         self.wav_files = self.list_wav_files()
-    #         self.data_list = self.read_wav_files(self.wav_files)
-    #         self.organized_data = self.organize_data(self.data_list)
-    #         self.train_data, self.val_data, self.test_data = self.create_splits(self.organized_data)
-    #         self.check_data_leakage()
-    #         self.print_class_distribution()
-            
-    #         # Get global min and max values from training data
-    #         self.global_min, self.global_max = self.get_min_max_train()
-            
-    #         # Normalize train, validation, and test data using the global min and max
-    #         self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
-    #         self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
-    #         self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
-            
-    #         self.prepared = True
     
     def setup(self, stage=None):
         pass

@@ -34,7 +34,7 @@ def plot_tsne(tsne_results, labels, class_names, title):
     plt.close()
 
 
-def plot_confusion_matrix(preds, labels, class_names, output_file):
+def plot_confusion_matrix(model_name, preds, labels, class_names, output_file):
     # Convert predictions to class labels if they are logits
     if preds.ndim > 1 and preds.size(1) > 1:
         preds = preds.argmax(dim=1)
@@ -58,7 +58,7 @@ def plot_confusion_matrix(preds, labels, class_names, output_file):
     plt.yticks(fontsize=16)
     plt.xlabel('Predicted Label', fontsize=20)
     plt.ylabel('True Label', fontsize=20)
-    plt.title('Confusion Matrix', fontsize=22)
+    plt.title(f'{model_name} Confusion Matrix', fontsize=22)
     plt.tight_layout()
     plt.savefig(output_file)
     plt.close()
@@ -67,16 +67,16 @@ def plot_confusion_matrix(preds, labels, class_names, output_file):
 
 def generate_tsne_plots(model_name, class_names):
     # Load test features, labels, and predictions
-    test_features, test_labels, test_preds = load_features(f"features/{model_name}_test_features.pth")
+    test_features, test_labels, test_preds = load_features(f"features/{model_name}_test_run0_features.pth")
     test_tsne_results = compute_tsne(test_features)
-    plot_tsne(test_tsne_results, test_labels, class_names, title=f"{model_name} Test t-SNE Plot")
+    plot_tsne(test_tsne_results, test_labels, class_names, title=f"{model_name} Test t-SNE")
 
 if __name__ == "__main__":
     class_names = ['Cargo', 'Passengership', 'Tanker', 'Tug']
-    model_name = "CNN_14_16k"
+    model_name = "CNN_14_32k"
 
-    #generate_tsne_plots(model_name, class_names)
+    generate_tsne_plots(model_name, class_names)
 
     # Plot confusion matrix
-    _, test_labels, test_preds = load_features(f"features/{model_name}_test_features.pth")
-    plot_confusion_matrix(test_preds, test_labels, class_names, output_file=f"features/{model_name}_confusion_matrix_test.png")
+    _, test_labels, test_preds = load_features(f"features/{model_name}_test_run0_features.pth")
+    plot_confusion_matrix(model_name, test_preds, test_labels, class_names, output_file=f"features/{model_name}_confusion_matrix_test.png")

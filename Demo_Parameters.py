@@ -172,7 +172,7 @@ def Parameters(args):
     Data_dirs = {'DeepShip': './Datasets/DeepShip/Segments/'}
     
     segment_length = {'DeepShip': 5}
-    sample_rate ={'DeepShip': 16000}
+    sample_rate ={'DeepShip': 32000}
     
     
     #ResNet models to use for each dataset

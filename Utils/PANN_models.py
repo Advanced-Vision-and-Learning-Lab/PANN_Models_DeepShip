@@ -944,11 +944,20 @@ class ResNet38(nn.Module):
         x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        #clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        
+        #output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
-        return output_dict
+
+        output = self.fc_audioset(embedding)
+        # clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        
+        # output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+
+
+        return output
 
 
 class ResNet54(nn.Module):
@@ -1422,11 +1431,13 @@ class MobileNetV1(nn.Module):
         x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        output = self.fc_audioset(embedding)
+        
+        #clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        #output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
-        return output_dict
+        return output
 
 
 class InvertedResidual(nn.Module):
@@ -2132,12 +2143,15 @@ class Res1dNet31(nn.Module):
         x = x1 + x2
         x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
-        embedding = F.dropout(x, p=0.5, training=self.training)
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        
+        output = self.fc_audioset(embedding)
 
-        return output_dict
+        #clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        #output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output
 
 
 class Res1dNet51(nn.Module):
@@ -2427,11 +2441,14 @@ class Wavegram_Logmel_Cnn14(nn.Module):
         x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
         
-        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+        output = self.fc_audioset(embedding)
 
-        return output_dict
+        #clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        
+        #output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output
 
 
 class Wavegram_Logmel128_Cnn14(nn.Module):

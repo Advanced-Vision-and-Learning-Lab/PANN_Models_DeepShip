@@ -85,39 +85,6 @@ class SSAudioDataModule(L.LightningDataModule):
         print(f'Organized data into {len(organized_data)} classes')
         return organized_data
 
-    # def create_splits(self, organized_data):
-    #     all_recording_names = []
-    #     class_labels = []
-
-    #     for class_name, recordings in organized_data.items():
-    #         for recording_name in recordings.keys():
-    #             all_recording_names.append((class_name, recording_name))
-    #             class_labels.append(class_name)
-
-    #     sss = StratifiedShuffleSplit(n_splits=1, test_size=self.test_size + self.val_size, random_state=42)
-    #     train_index, temp_index = next(sss.split(all_recording_names, class_labels))
-
-    #     val_test_size = self.val_size / (self.test_size + self.val_size)
-    #     sss_temp = StratifiedShuffleSplit(n_splits=1, test_size=val_test_size, random_state=42)
-    #     val_index, test_index = next(sss_temp.split(np.array(all_recording_names)[temp_index], np.array(class_labels)[temp_index]))
-
-    #     train_data, val_data, test_data = [], [], []
-
-    #     for idx in train_index:
-    #         class_name, recording_name = all_recording_names[idx]
-    #         train_data.extend(organized_data[class_name][recording_name])
-
-    #     for idx in val_index:
-    #         class_name, recording_name = all_recording_names[temp_index[idx]]
-    #         val_data.extend(organized_data[class_name][recording_name])
-
-    #     for idx in test_index:
-    #         class_name, recording_name = all_recording_names[temp_index[idx]]
-    #         test_data.extend(organized_data[class_name][recording_name])
-
-    #     print('Created train, validation, and test splits')
-    #     return train_data, val_data, test_data
-
 
     def create_splits(self, organized_data):
         all_recordings = []

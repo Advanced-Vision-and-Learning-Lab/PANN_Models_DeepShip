@@ -38,8 +38,6 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
-from lightning.pytorch.callbacks import RichProgressBar
-from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 import torchmetrics
 
 from Datasets.Get_preprocessed_data import process_data
@@ -59,11 +57,9 @@ from SSDataModule import SSAudioDataModule
 from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
 from torchmetrics.classification import F1Score
 
-import torch
-import torch.nn.functional as F
+
 from sklearn.metrics import roc_curve, auc
-import matplotlib.pyplot as plt
-from itertools import cycle
+
 import numpy as np
 import os
 

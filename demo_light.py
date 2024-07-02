@@ -83,7 +83,8 @@ def main(Params):
     
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
-
+    
+    s_rate=Params['sample_rate']
 
     torch.set_float32_matmul_precision('medium')
     all_val_accs = []
@@ -122,7 +123,7 @@ def main(Params):
         )
     
         logger = TensorBoardLogger(
-            f"tb_logs/{model_name}_b{batch_size}_SS/Run_{run_number}",
+            f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}",
             name=f"{model_name}"
         )
     
@@ -156,7 +157,7 @@ def main(Params):
         best_test_acc = max(result['test_acc'] for result in test_results)
         all_test_accs.append(best_test_acc)
     
-        results_filename = f"tb_logs/{model_name}_b{batch_size}_SS/Run_{run_number}/metrics.txt"
+        results_filename = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/metrics.txt"
         with open(results_filename, "a") as file:
             file.write(f"Run_{run_number}:\n\n")
             file.write(f"Best Validation Accuracy: {best_val_acc:.4f}\n")
@@ -172,7 +173,7 @@ def main(Params):
     overall_avg_test_f1 = np.mean(all_test_f1s)
     overall_std_test_f1 = np.std(all_test_f1s)
     
-    summary_filename = f"tb_logs/{model_name}_b{batch_size}_SS/summary_metrics.txt"
+    summary_filename = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/summary_metrics.txt"
     with open(summary_filename, "w") as file:
         file.write("Overall Results Across All Runs\n\n")
         file.write(f"Overall Average of Best Validation Accuracies: {overall_avg_val_acc:.4f}\n")
@@ -203,7 +204,7 @@ def parse_args():
                         help='Flag for feature extraction. False, train whole model. True, only update fully connected and histogram layers parameters (default: True)')
     parser.add_argument('--use_pretrained', default=True, action=argparse.BooleanOptionalAction,
                         help='Flag to use pretrained model from ImageNet or train from scratch (default: True)')
-    parser.add_argument('--train_batch_size', type=int, default=128,
+    parser.add_argument('--train_batch_size', type=int, default=64,
                         help='input batch size for training (default: 128)')
     parser.add_argument('--val_batch_size', type=int, default=128,
                         help='input batch size for validation (default: 512)')
@@ -221,8 +222,10 @@ def parse_args():
                         help='Audio feature for extraction')
     parser.add_argument('--optimizer', type=str, default='Adam',
                         help='Select optimizer')
-    parser.add_argument('--patience', type=int, default=1,
+    parser.add_argument('--patience', type=int, default=5,
                         help='Number of epochs to train each model for (default: 50)')
+    parser.add_argument('--sample_rate', type=int, default=16000,
+                        help='Dataset Sample Rate')
     args = parser.parse_args()
     return args
 

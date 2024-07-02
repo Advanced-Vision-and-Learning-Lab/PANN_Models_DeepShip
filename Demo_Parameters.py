@@ -172,8 +172,8 @@ def Parameters(args):
     Data_dirs = {'DeepShip': './Datasets/DeepShip/Segments/'}
     
     segment_length = {'DeepShip': 5}
-    sample_rate ={'DeepShip': 32000}
-    
+    #sample_rate ={'DeepShip': 32000}
+    sample_rate = args.sample_rate
     
     #ResNet models to use for each dataset
     Model_name = args.model
@@ -194,7 +194,7 @@ def Parameters(args):
     Dataset = Dataset_names[data_selection]
     data_dir = Data_dirs[Dataset]
     segment_length = segment_length[Dataset]
-    sample_rate = sample_rate[Dataset]
+    #sample_rate = sample_rate[Dataset]
     
     new_dir_p = './Datasets/DeepShip/'
     new_dir = '{}Segments_{}s_{}hz/'.format(new_dir_p,segment_length,sample_rate)
@@ -214,7 +214,7 @@ def Parameters(args):
                           'histogram': histogram,'Dataset': Dataset, 'data_dir': data_dir,'segment_length':segment_length,'sample_rate':sample_rate,
                           'optimizer': optimizer,'new_dir': new_dir,
                           'num_workers': num_workers, 'mode': mode,'lr': lr,
-                          'step_size': step_size,
+                          'step_size': step_size, 
                           'gamma': gamma, 'batch_size' : batch_size, 
                           'num_epochs': num_epochs, 
                           'padding': padding, 

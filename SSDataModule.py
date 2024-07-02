@@ -15,6 +15,7 @@ from scipy.io import wavfile
 import lightning as L
 from sklearn.model_selection import StratifiedShuffleSplit
 import librosa
+import random
 
 class SSAudioDataset(Dataset):
     def __init__(self, data_list, class_to_idx):
@@ -84,38 +85,69 @@ class SSAudioDataModule(L.LightningDataModule):
         print(f'Organized data into {len(organized_data)} classes')
         return organized_data
 
-    def create_splits(self, organized_data):
-        all_recording_names = []
-        class_labels = []
+    # def create_splits(self, organized_data):
+    #     all_recording_names = []
+    #     class_labels = []
 
+    #     for class_name, recordings in organized_data.items():
+    #         for recording_name in recordings.keys():
+    #             all_recording_names.append((class_name, recording_name))
+    #             class_labels.append(class_name)
+
+    #     sss = StratifiedShuffleSplit(n_splits=1, test_size=self.test_size + self.val_size, random_state=42)
+    #     train_index, temp_index = next(sss.split(all_recording_names, class_labels))
+
+    #     val_test_size = self.val_size / (self.test_size + self.val_size)
+    #     sss_temp = StratifiedShuffleSplit(n_splits=1, test_size=val_test_size, random_state=42)
+    #     val_index, test_index = next(sss_temp.split(np.array(all_recording_names)[temp_index], np.array(class_labels)[temp_index]))
+
+    #     train_data, val_data, test_data = [], [], []
+
+    #     for idx in train_index:
+    #         class_name, recording_name = all_recording_names[idx]
+    #         train_data.extend(organized_data[class_name][recording_name])
+
+    #     for idx in val_index:
+    #         class_name, recording_name = all_recording_names[temp_index[idx]]
+    #         val_data.extend(organized_data[class_name][recording_name])
+
+    #     for idx in test_index:
+    #         class_name, recording_name = all_recording_names[temp_index[idx]]
+    #         test_data.extend(organized_data[class_name][recording_name])
+
+    #     print('Created train, validation, and test splits')
+    #     return train_data, val_data, test_data
+
+
+    def create_splits(self, organized_data):
+        all_recordings = []
         for class_name, recordings in organized_data.items():
             for recording_name in recordings.keys():
-                all_recording_names.append((class_name, recording_name))
-                class_labels.append(class_name)
+                all_recordings.append((class_name, recording_name, organized_data[class_name][recording_name]))
 
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=self.test_size + self.val_size, random_state=42)
-        train_index, temp_index = next(sss.split(all_recording_names, class_labels))
+        # Shuffling to ensure randomness
+        random.seed(42)
+        random.shuffle(all_recordings)
 
-        val_test_size = self.val_size / (self.test_size + self.val_size)
-        sss_temp = StratifiedShuffleSplit(n_splits=1, test_size=val_test_size, random_state=42)
-        val_index, test_index = next(sss_temp.split(np.array(all_recording_names)[temp_index], np.array(class_labels)[temp_index]))
+        # Calculating split indices
+        total_recordings = len(all_recordings)
+        num_test = int(total_recordings * self.test_size)
+        num_val = int(total_recordings * self.val_size)
+        num_train = total_recordings - num_test - num_val
 
-        train_data, val_data, test_data = [], [], []
+        # Allocating recordings to splits
+        test_recordings = all_recordings[:num_test]
+        val_recordings = all_recordings[num_test:num_test + num_val]
+        train_recordings = all_recordings[num_test + num_val:]
 
-        for idx in train_index:
-            class_name, recording_name = all_recording_names[idx]
-            train_data.extend(organized_data[class_name][recording_name])
-
-        for idx in val_index:
-            class_name, recording_name = all_recording_names[temp_index[idx]]
-            val_data.extend(organized_data[class_name][recording_name])
-
-        for idx in test_index:
-            class_name, recording_name = all_recording_names[temp_index[idx]]
-            test_data.extend(organized_data[class_name][recording_name])
+        # Extracting the actual data from the tuples
+        train_data = [data for _, _, recordings in train_recordings for data in recordings]
+        val_data = [data for _, _, recordings in val_recordings for data in recordings]
+        test_data = [data for _, _, recordings in test_recordings for data in recordings]
 
         print('Created train, validation, and test splits')
         return train_data, val_data, test_data
+
 
     def check_data_leakage(self):
         print("\nChecking data leakage")
@@ -257,7 +289,7 @@ class SSAudioDataModule(L.LightningDataModule):
         self.val_data = []
         self.test_data = []
         
-        first_file = True  # Flag to check if it's the first file being processed
+        first_file = True  
         current_split = None
         with open(filepath, 'r') as f:
             for line in f:
@@ -302,46 +334,6 @@ class SSAudioDataModule(L.LightningDataModule):
         self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
         self.prepared = True
 
-    # def load_split_indices(self, filepath):
-    #     print("\nLoading split indices from the saved file...\n")
-    #     self.train_data = []
-    #     self.val_data = []
-    #     self.test_data = []
-        
-    #     current_split = None
-    #     with open(filepath, 'r') as f:
-    #         for line in f:
-    #             line = line.strip()
-    #             if line.startswith('Train indices and paths:'):
-    #                 current_split = 'train'
-    #             elif line.startswith('Validation indices and paths:'):
-    #                 current_split = 'val'
-    #             elif line.startswith('Test indices and paths:'):
-    #                 current_split = 'test'
-    #             elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
-    #                 if current_split:
-    #                     idx, file_path = line.split(': ', 1)
-    #                     sampling_rate, data = wavfile.read(file_path)  
-    #                     file_data = {
-    #                         'file_path': file_path,
-    #                         'sampling_rate': sampling_rate,
-    #                         'data': data
-    #                     }
-    #                     if current_split == 'train':
-    #                         self.train_data.append(file_data)
-    #                     elif current_split == 'val':
-    #                         self.val_data.append(file_data)
-    #                     elif current_split == 'test':
-    #                         self.test_data.append(file_data)
-
-    #     #if not self.prepared:
-    #     self.check_data_leakage()
-    #     self.print_class_distribution()
-    #     self.global_min, self.global_max = self.get_min_max_train()
-    #     self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)
-    #     self.val_data = self.normalize_data(self.val_data, self.global_min, self.global_max)
-    #     self.test_data = self.normalize_data(self.test_data, self.global_min, self.global_max)
-    #     self.prepared = True
 
 
     def prepare_data(self):

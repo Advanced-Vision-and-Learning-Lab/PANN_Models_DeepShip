@@ -27,7 +27,7 @@ from torchlibrosa.augmentation import SpecAugmentation
 
 
 class MelSpectrogramExtractor(nn.Module): 
-    def __init__(self, sample_rate=16000, n_fft=512, win_length=512, hop_length=160, n_mels=64, fmin=50, fmax=8000):
+    def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
         super(MelSpectrogramExtractor, self).__init__()
         
         # Settings for Spectrogram
@@ -36,9 +36,9 @@ class MelSpectrogramExtractor(nn.Module):
         pad_mode = 'reflect'
         
         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
-                                                 win_length=win_length, window=window, center=center, 
-                                                 pad_mode=pad_mode, 
-                                                 freeze_parameters=True)
+                                                  win_length=win_length, window=window, center=center, 
+                                                  pad_mode=pad_mode, 
+                                                  freeze_parameters=True)
 
         # Logmel feature extractor
         ref = 1.0
@@ -56,6 +56,66 @@ class MelSpectrogramExtractor(nn.Module):
         log_mel_spectrogram = self.logmel_extractor(spectrogram)
         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
         return augmented_log_mel_spectrogram
+
+
+# import torch
+# import torch.nn as nn
+# import matplotlib.pyplot as plt
+# import pdb
+
+# class MelSpectrogramExtractor(nn.Module): 
+#     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
+#         super(MelSpectrogramExtractor, self).__init__()
+        
+#         # Settings for Spectrogram
+#         window = 'hann'
+#         center = True
+#         pad_mode = 'reflect'
+        
+#         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
+#                                                  win_length=win_length, window=window, center=center, 
+#                                                  pad_mode=pad_mode, 
+#                                                  freeze_parameters=True)
+
+#         # Logmel feature extractor
+#         ref = 1.0
+#         amin = 1e-10
+#         top_db = None
+#         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
+#             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
+        
+#         # Spec augmenter
+#         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+#             freq_drop_width=8, freq_stripes_num=2)
+        
+#     def forward(self, waveform):
+        
+#         spectrogram = self.spectrogram_extractor(waveform)
+#         log_mel_spectrogram = self.logmel_extractor(spectrogram)
+#         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+        
+#         # Save spectrogram figure for the first sample in the batch
+#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'high_res_spectrogram.png', dpi=300)
+#         pdb.set_trace()
+#         return augmented_log_mel_spectrogram
+
+#     def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=300):
+#         spectrogram = spectrogram.squeeze().cpu().numpy()
+#         plt.figure(figsize=(6, 4))
+#         plt.imshow(spectrogram, aspect='auto', origin='lower')
+#         plt.colorbar(format='%+2.0f dB').set_label('Power (dB)')
+#         plt.title('Log Mel Spectrogram')
+#         plt.xlabel('Mel Bins')
+#         plt.ylabel('Time')
+#         plt.savefig(filename, dpi=dpi)
+#         plt.close()
+
+#         print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
+
+
+
+
+
 
 
 class CustomPANN(nn.Module):

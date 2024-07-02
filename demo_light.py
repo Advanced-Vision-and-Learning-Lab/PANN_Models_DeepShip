@@ -69,7 +69,7 @@ def main(Params):
 
     print('\nStarting Experiments...')
     
-    numRuns = 1
+    numRuns = 3
     run_number = 0
     seed_everything(run_number+1, workers=True)
 
@@ -191,7 +191,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_16k #CNN_14_16k #ViT-B/16
+    parser.add_argument('--model', type=str, default='efficientnet_b3', #CNN_14_16k #CNN_14_16k #ViT-B/16
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

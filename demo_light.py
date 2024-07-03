@@ -151,10 +151,11 @@ def main(Params):
         )
     
         test_results = trainer.test(model=best_model, datamodule=data_module)
-        best_test_f1 = max(result['test_f1'] for result in test_results)
+        
+        best_test_f1 = test_results[0]['test_f1']
         all_test_f1s.append(best_test_f1)
     
-        best_test_acc = max(result['test_acc'] for result in test_results)
+        best_test_acc = test_results[0]['test_acc']
         all_test_accs.append(best_test_acc)
     
         results_filename = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/metrics.txt"
@@ -224,7 +225,7 @@ def parse_args():
                         help='Select optimizer')
     parser.add_argument('--patience', type=int, default=5,
                         help='Number of epochs to train each model for (default: 50)')
-    parser.add_argument('--sample_rate', type=int, default=16000,
+    parser.add_argument('--sample_rate', type=int, default=32000,
                         help='Dataset Sample Rate')
     args = parser.parse_args()
     return args

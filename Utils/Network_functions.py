@@ -58,10 +58,10 @@ class MelSpectrogramExtractor(nn.Module):
         return augmented_log_mel_spectrogram
 
 
-# import torch
-# import torch.nn as nn
+# # import torch
+# # import torch.nn as nn
 # import matplotlib.pyplot as plt
-# import pdb
+# # import pdb
 
 # class MelSpectrogramExtractor(nn.Module): 
 #     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
@@ -73,9 +73,9 @@ class MelSpectrogramExtractor(nn.Module):
 #         pad_mode = 'reflect'
         
 #         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
-#                                                  win_length=win_length, window=window, center=center, 
-#                                                  pad_mode=pad_mode, 
-#                                                  freeze_parameters=True)
+#                                                   win_length=win_length, window=window, center=center, 
+#                                                   pad_mode=pad_mode, 
+#                                                   freeze_parameters=True)
 
 #         # Logmel feature extractor
 #         ref = 1.0
@@ -95,15 +95,16 @@ class MelSpectrogramExtractor(nn.Module):
 #         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
         
 #         # Save spectrogram figure for the first sample in the batch
-#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'high_res_spectrogram.png', dpi=300)
+#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'logmelspectrogram.png', dpi=300)
 #         pdb.set_trace()
+#         self.save_spectrogram_figure(augmented_log_mel_spectrogram[0], 'auglogmelspectrogram.png', dpi=300)
 #         return augmented_log_mel_spectrogram
 
 #     def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=300):
 #         spectrogram = spectrogram.squeeze().cpu().numpy()
 #         plt.figure(figsize=(6, 4))
 #         plt.imshow(spectrogram, aspect='auto', origin='lower')
-#         plt.colorbar(format='%+2.0f dB').set_label('Power (dB)')
+#         plt.colorbar(format='%+2.0f dB').set_label('Power')
 #         plt.title('Log Mel Spectrogram')
 #         plt.xlabel('Mel Bins')
 #         plt.ylabel('Time')
@@ -111,7 +112,6 @@ class MelSpectrogramExtractor(nn.Module):
 #         plt.close()
 
 #         print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
-
 
 
 

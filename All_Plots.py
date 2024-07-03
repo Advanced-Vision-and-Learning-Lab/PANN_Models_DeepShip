@@ -57,7 +57,7 @@ def save_tsne_plot(model, test_loader, class_names, device, output_path):
     tsne_results = tsne.fit_transform(all_features)
 
     # Plot t-SNE
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(8, 6))
     colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
     for i, color in zip(range(len(class_names)), colors):
         indices = all_labels == i
@@ -95,7 +95,7 @@ def save_confusion_matrix(model, test_loader, class_names, device, output_path):
     cm = confusion_matrix(all_labels, all_preds)
 
     # Plot confusion matrix
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(8, 6))
     ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 15})
 
     # Make the annotations more visible
@@ -155,7 +155,7 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
     # Plot all ROC curves
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(8, 6))
     colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
     for i, color in zip(range(num_classes), colors):
         plt.plot(fpr[i], tpr[i], color=color, lw=2,
@@ -221,7 +221,7 @@ def save_learning_curves(log_dir, output_path):
 
     # Plot learning curves if both scalars are available
     if train_loss and val_loss:
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(8, 6))
         plt.plot(train_loss, label='Training Loss', color='blue', lw=2)
         plt.plot(val_loss, label='Validation Loss', color='orange', lw=2)
         plt.xlabel('Epochs', fontsize=15)
@@ -257,7 +257,7 @@ def save_accuracy_curves(log_dir, output_path):
 
     # Plot accuracy curves if both scalars are available
     if train_acc and val_acc:
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(8, 6))
         plt.plot(train_acc, label='Training Accuracy', color='green', lw=2)
         plt.plot(val_acc, label='Validation Accuracy', color='red', lw=2)
         plt.xlabel('Epochs', fontsize=15)

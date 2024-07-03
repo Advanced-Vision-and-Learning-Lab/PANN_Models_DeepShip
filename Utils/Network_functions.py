@@ -222,15 +222,20 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
             'class': 'resnet50',
             'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
         },
-        'densenet121': {
-            'class': 'densenet121',
+        'densenet201': {
+            'class': 'densenet201',
             'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
         },
         'mobilenetv3_large_100': {
             'class': 'mobilenetv3_large_100', 
             'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
+        },
+        'regnety_320': {
+            'class': 'regnety_320', 
+            'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
         }
     }
+
 
     if model_name not in model_params:
         raise RuntimeError('{} not implemented'.format(model_name))
@@ -286,9 +291,11 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           elif 'classifier' in dir(model_ft):
             num_ftrs = model_ft.classifier.in_features
             model_ft.classifier = nn.Linear(num_ftrs, num_classes)
-          elif 'head' in dir(model_ft):
-            num_ftrs = model_ft.head.in_features
-            model_ft.head = nn.Linear(num_ftrs, num_classes)
+          #elif 'head' in dir(model_ft):
+          elif 'head' in dir(model_ft) and hasattr(model_ft.head, 'fc'): 
+            num_ftrs = model_ft.head.fc.in_features
+            model_ft.head.fc = nn.Linear(num_ftrs, num_classes)
+                    
         
           custom_model = CustomTIMM(model_ft)
           

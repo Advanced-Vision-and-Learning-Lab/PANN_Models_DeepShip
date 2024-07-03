@@ -7,66 +7,31 @@ Created on Mon Jul  1 19:38:19 2024
 """
 from __future__ import print_function
 from __future__ import division
-import torch
 import torch.nn.functional as F
-from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 from itertools import cycle
 import numpy as np
 import os
 
-
-import numpy as np
 import argparse
-import random
-
-# PyTorch dependencies
 import torch
-import torch.nn as nn
 
-# Local external libraries
 from Demo_Parameters import Parameters
-import pdb
-
-import torch.nn.functional as F
-import os
-
 import lightning as L
-from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks import ModelCheckpoint
-
-
 import torchmetrics
 
-from Datasets.Get_preprocessed_data import process_data
-
-from tqdm.auto import tqdm
-
-# This code uses a newer version of numpy while other packages use an older version of numpy
-# This is a simple workaround to avoid errors that arise from the deprecation of numpy data types
 np.float = float  # module 'numpy' has no attribute 'float'
 np.int = int  # module 'numpy' has no attribute 'int'
 np.object = object  # module 'numpy' has no attribute 'object'
 np.bool = bool  # module 'numpy' has no attribute 'bool'
 
-
 from SSDataModule import SSAudioDataModule
-
-from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
-from torchmetrics.classification import F1Score
-
-
 from sklearn.metrics import roc_curve, auc
-
-import numpy as np
-import os
-
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
 from sklearn.manifold import TSNE
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 def save_tsne_plot(model, test_loader, class_names, device, output_path):
     model.eval()
@@ -92,15 +57,17 @@ def save_tsne_plot(model, test_loader, class_names, device, output_path):
     tsne_results = tsne.fit_transform(all_features)
 
     # Plot t-SNE
-    plt.figure(figsize=(10, 8))
-    for i, class_name in enumerate(class_names):
+    plt.figure(figsize=(12, 10))
+    colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
+    for i, color in zip(range(len(class_names)), colors):
         indices = all_labels == i
-        plt.scatter(tsne_results[indices, 0], tsne_results[indices, 1], label=class_name, alpha=0.7)
-    plt.xlabel('t-SNE Component 1')
-    plt.ylabel('t-SNE Component 2')
-    plt.title('t-SNE Plot')
-    plt.legend()
-    
+        plt.scatter(tsne_results[indices, 0], tsne_results[indices, 1], label=class_names[i], color=color, alpha=0.7, s=50)  # s=50 for larger points
+    plt.xlabel('t-SNE Component 1', fontsize=15)
+    plt.ylabel('t-SNE Component 2', fontsize=15)
+    plt.title('t-SNE Plot', fontsize=18)
+    plt.legend(loc="best", fontsize=12)
+    plt.grid(True)
+
     # Save the figure
     plt.savefig(output_path, dpi=300)
     plt.close()
@@ -126,18 +93,31 @@ def save_confusion_matrix(model, test_loader, class_names, device, output_path):
 
     # Compute confusion matrix
     cm = confusion_matrix(all_labels, all_preds)
-    
+
     # Plot confusion matrix
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    
+    plt.figure(figsize=(12, 10))
+    ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 15})
+
+    # Make the annotations more visible
+    for t in ax.texts:
+        text_value = int(t.get_text())
+        t.set_size(15)  # Increase font size
+        if text_value > cm.max() / 2:
+            t.set_color('white')  # Use white text for dark squares
+        else:
+            t.set_color('black')  # Use black text for light squares
+
+    plt.xlabel('Predicted', fontsize=15)
+    plt.ylabel('True', fontsize=15)
+    plt.title('Confusion Matrix', fontsize=18)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.tight_layout()
+
     # Save the figure
     plt.savefig(output_path, dpi=300)
     plt.close()
-
+    
 def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     model.eval()
     model.to(device)
@@ -170,8 +150,12 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
         fpr[i], tpr[i], _ = roc_curve(all_labels[:, i], all_preds[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
 
+    # Compute micro-average ROC curve and ROC area
+    fpr["micro"], tpr["micro"], _ = roc_curve(all_labels.ravel(), all_preds.ravel())
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
     # Plot all ROC curves
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(12, 10))
     colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
     for i, color in zip(range(num_classes), colors):
         plt.plot(fpr[i], tpr[i], color=color, lw=2,
@@ -181,17 +165,118 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     plt.plot([0, 1], [0, 1], 'k--', lw=2)
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic to Multi-class')
-    plt.legend(loc="lower right")
+    plt.xlabel('False Positive Rate', fontsize=15)
+    plt.ylabel('True Positive Rate', fontsize=15)
+    plt.title('Receiver Operating Characteristic to Multi-class', fontsize=18)
+    plt.legend(loc="lower right", fontsize=12)
+
+    # Add grid lines
+    plt.grid(True)
 
     # Save the figure
     plt.savefig(output_path, dpi=300)
     plt.close()
 
+    
 
 
+
+
+def extract_scalar_from_events(event_paths, scalar_name):
+    scalar_values = []
+    for event_path in event_paths:
+        event_acc = EventAccumulator(event_path)
+        event_acc.Reload()
+        if scalar_name in event_acc.Tags()['scalars']:
+            scalar_events = event_acc.Scalars(scalar_name)
+            values = [event.value for event in scalar_events]
+            scalar_values.extend(values)
+    return scalar_values
+
+
+def list_available_scalars(event_paths):
+    available_scalars = set()
+    for event_path in event_paths:
+        event_acc = EventAccumulator(event_path)
+        event_acc.Reload()
+        available_scalars.update(event_acc.Tags()['scalars'])
+    return available_scalars
+
+
+def save_learning_curves(log_dir, output_path):
+    # Get all event files in the log directory
+    event_paths = []
+    for root, dirs, files in os.walk(log_dir):
+        for file in files:
+            if file.startswith('events.out.tfevents.'):
+                event_paths.append(os.path.join(root, file))
+
+    # List all available scalars
+    available_scalars = list_available_scalars(event_paths)
+    print("Available Scalars:", available_scalars)
+
+    # Use correct scalar names after checking available scalars
+    train_loss = extract_scalar_from_events(event_paths, 'loss_epoch')
+    val_loss = extract_scalar_from_events(event_paths, 'val_loss')
+
+    # Plot learning curves if both scalars are available
+    if train_loss and val_loss:
+        plt.figure(figsize=(12, 10))
+        plt.plot(train_loss, label='Training Loss', color='blue', lw=2)
+        plt.plot(val_loss, label='Validation Loss', color='orange', lw=2)
+        plt.xlabel('Epochs', fontsize=15)
+        plt.ylabel('Loss', fontsize=15)
+        plt.title('Learning Curves', fontsize=18)
+        plt.legend(loc="best", fontsize=12)
+        plt.grid(True)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+
+        # Save the figure
+        plt.savefig(output_path, dpi=300)
+        plt.close()
+    else:
+        print("Required scalars ('loss_epoch', 'val_loss') not found in event files.")
+
+
+def save_accuracy_curves(log_dir, output_path):
+    # Get all event files in the log directory
+    event_paths = []
+    for root, dirs, files in os.walk(log_dir):
+        for file in files:
+            if file.startswith('events.out.tfevents.'):
+                event_paths.append(os.path.join(root, file))
+
+    # List all available scalars
+    available_scalars = list_available_scalars(event_paths)
+    print("Available Scalars:", available_scalars)
+
+    # Use correct scalar names after checking available scalars
+    train_acc = extract_scalar_from_events(event_paths, 'train_acc')
+    val_acc = extract_scalar_from_events(event_paths, 'val_acc')
+
+    # Plot accuracy curves if both scalars are available
+    if train_acc and val_acc:
+        plt.figure(figsize=(12, 10))
+        plt.plot(train_acc, label='Training Accuracy', color='green', lw=2)
+        plt.plot(val_acc, label='Validation Accuracy', color='red', lw=2)
+        plt.xlabel('Epochs', fontsize=15)
+        plt.ylabel('Accuracy', fontsize=15)
+        plt.title('Accuracy Curves', fontsize=18)
+        plt.legend(loc="best", fontsize=12)
+        plt.grid(True)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+
+        # Save the figure
+        plt.savefig(output_path, dpi=300)
+        plt.close()
+    else:
+        print("Required scalars ('train_acc', 'val_acc') not found in event files.")
+
+
+
+import glob
 from LitModel import LitModel
 
 def main(Params):
@@ -211,24 +296,22 @@ def main(Params):
     print('\nStarting Experiments...')
     
     numRuns = 3
+    
     run_number = 0
 
-    data_dir = Params["data_dir"]  
     new_dir = Params["new_dir"]  
     
     print("\nDataset sample rate: ", Params['sample_rate'])
     print("\nModel name: ", model_name, "\n")
     
-    
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
 
-
     torch.set_float32_matmul_precision('medium')
-
     
-    best_model_path = f"tb_logs/{model_name}_b{batch_size}_SS/Run_{run_number}/{model_name}/version_0/checkpoints/best-epoch=00-val_acc=0.64.ckpt"
-
+    s_rate=Params['sample_rate']
+    
+    best_model_path = glob.glob(f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}/version_0/checkpoints/*.ckpt")[0]
 
     best_model = LitModel.load_from_checkpoint(
         checkpoint_path=best_model_path,
@@ -247,24 +330,44 @@ def main(Params):
     # Define class names
     class_names = ["Cargo", "Passengership", "Tanker", "Tug"]
     
+    # Create directory if it doesn't exist
+    output_dir = f"features/{model_name}_{s_rate}_Run{run_number}"
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Define output path for the ROC plot
-    output_path = "features/roc_curve.png"
+    output_path = os.path.join(output_dir, "roc_curve.png")
     
     # Plot ROC curves and save the figure
     plot_multiclass_roc(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=output_path)
         
     # Define output path for the confusion matrix plot
-    cm_output_path = "features/confusion_matrix.png"
-    
+    cm_output_path = os.path.join(output_dir, "confusion_matrix.png")
+        
     # Save confusion matrix
     save_confusion_matrix(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_output_path)
       
     # Define output path for the t-SNE plot
-    tsne_output_path = "features/tsne_plot.png"
-    
+    tsne_output_path = os.path.join(output_dir, "tsne_plot.png")
+        
     # Save t-SNE plot
     save_tsne_plot(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=tsne_output_path)
+     
+    
+    # Define output path for the learning curves plot
+    learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
+    
+    # Save learning curves
+    log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
+    save_learning_curves(log_dir, learning_curves_output_path)
+    
+    # Define output path for the accuracy curves plot
+    accuracy_curves_output_path = os.path.join(output_dir, "accuracy_curves.png")
+    
+    # Save accuracy curves
+    save_accuracy_curves(log_dir, accuracy_curves_output_path)
         
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -285,7 +388,7 @@ def parse_args():
                         help='Flag for feature extraction. False, train whole model. True, only update fully connected and histogram layers parameters (default: True)')
     parser.add_argument('--use_pretrained', default=True, action=argparse.BooleanOptionalAction,
                         help='Flag to use pretrained model from ImageNet or train from scratch (default: True)')
-    parser.add_argument('--train_batch_size', type=int, default=128,
+    parser.add_argument('--train_batch_size', type=int, default=64,
                         help='input batch size for training (default: 128)')
     parser.add_argument('--val_batch_size', type=int, default=128,
                         help='input batch size for validation (default: 512)')
@@ -305,6 +408,8 @@ def parse_args():
                         help='Select optimizer')
     parser.add_argument('--patience', type=int, default=1,
                         help='Number of epochs to train each model for (default: 50)')
+    parser.add_argument('--sample_rate', type=int, default=32000,
+                        help='Dataset Sample Rate')
     args = parser.parse_args()
     return args
 

@@ -120,31 +120,6 @@ class LitModel(L.LightningModule):
         # self.test_features.append(features.cpu())
     
         return test_loss
-    
-    #def on_test_epoch_end(self):
-    #    self.log('test_acc_epoch', self.test_acc.compute())
-    #    self.val_acc.reset()   
-    #   
-    #    self.log('test_f1_epoch', self.test_f1.compute())
-    #    self.test_f1.reset()   
-    #    self.save_features("test", self.hparams.model_name, self.run_number)
-    
-
-    
-    # def save_features(self, phase, model_name, run_number):
-    #     os.makedirs("features", exist_ok=True)
-    #     features_file_path = f"features/{model_name}_{phase}_run{run_number}_features.pth"
-    #     #labels_file_path = f"features/{model_name}_{phase}_run{run_number}_labels.pth"
-    #     #preds_file_path = f"features/{model_name}_{phase}_run{run_number}_preds.pth"
-    
-    #     # Convert lists to tensors
-    #     features_tensor = torch.cat(self.test_features)
-    #     labels_tensor = torch.cat(self.test_labels)
-    #     preds_tensor = torch.cat(self.test_preds).argmax(dim=1)
-    
-    #     # Save tensors
-    #     torch.save({'features': features_tensor, 'labels': labels_tensor, 'preds': preds_tensor}, features_file_path)
-
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)

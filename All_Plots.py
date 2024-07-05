@@ -7,7 +7,7 @@ Created on Mon Jul  1 19:38:19 2024
 """
 from __future__ import print_function
 from __future__ import division
-import torch.nn.functional as F
+
 import matplotlib.pyplot as plt
 from itertools import cycle
 import numpy as np
@@ -17,9 +17,6 @@ import argparse
 import torch
 
 from Demo_Parameters import Parameters
-import lightning as L
-from lightning.pytorch.loggers import TensorBoardLogger
-import torchmetrics
 
 np.float = float  # module 'numpy' has no attribute 'float'
 np.int = int  # module 'numpy' has no attribute 'int'
@@ -57,7 +54,7 @@ def save_tsne_plot(model, test_loader, class_names, device, output_path):
     tsne_results = tsne.fit_transform(all_features)
 
     # Plot t-SNE
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(6, 4))
     colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
     for i, color in zip(range(len(class_names)), colors):
         indices = all_labels == i
@@ -65,8 +62,11 @@ def save_tsne_plot(model, test_loader, class_names, device, output_path):
     plt.xlabel('t-SNE Component 1', fontsize=15)
     plt.ylabel('t-SNE Component 2', fontsize=15)
     plt.title('t-SNE Plot', fontsize=18)
-    plt.legend(loc="best", fontsize=12)
+    plt.legend(loc="best", fontsize=10)
     plt.grid(True)
+
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
 
     # Save the figure
     plt.savefig(output_path, dpi=300)
@@ -95,13 +95,13 @@ def save_confusion_matrix(model, test_loader, class_names, device, output_path):
     cm = confusion_matrix(all_labels, all_preds)
 
     # Plot confusion matrix
-    plt.figure(figsize=(8, 6))
-    ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 15})
+    plt.figure(figsize=(6, 4))
+    ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 16})
 
     # Make the annotations more visible
     for t in ax.texts:
         text_value = int(t.get_text())
-        t.set_size(15)  # Increase font size
+        t.set_size(16)  # Increase font size
         if text_value > cm.max() / 2:
             t.set_color('white')  # Use white text for dark squares
         else:
@@ -110,6 +110,53 @@ def save_confusion_matrix(model, test_loader, class_names, device, output_path):
     plt.xlabel('Predicted', fontsize=15)
     plt.ylabel('True', fontsize=15)
     plt.title('Confusion Matrix', fontsize=18)
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.tight_layout()
+
+    # Save the figure
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    
+def save_confusion_matrix_with_percentage(model, test_loader, class_names, device, output_path):
+    model.eval()
+    model.to(device)
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for batch in test_loader:
+            x, y = batch
+            x = x.to(device)
+            y = y.to(device)
+            _, y_pred = model(x)
+            all_preds.append(y_pred.cpu().argmax(dim=1))
+            all_labels.append(y.cpu())
+
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
+
+    # Compute confusion matrix
+    cm = confusion_matrix(all_labels, all_preds)
+    cm_percent = 100 * cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+    # Plot confusion matrix with percentages
+    plt.figure(figsize=(6, 4))
+    ax = sns.heatmap(cm_percent, annot=True, fmt=".2f", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 16})
+
+    for t in ax.texts:
+        text_value = float(t.get_text())
+        t.set_size(16)  # Increase font size
+        if text_value > cm_percent.max() / 2:
+            t.set_color('white')  # Use white text for dark squares
+        else:
+            t.set_color('black')  # Use black text for light squares
+
+    plt.xlabel('Predicted', fontsize=15)
+    plt.ylabel('True', fontsize=15)
+    plt.title('Confusion Matrix (%)', fontsize=18)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
     plt.tight_layout()
@@ -117,6 +164,134 @@ def save_confusion_matrix(model, test_loader, class_names, device, output_path):
     # Save the figure
     plt.savefig(output_path, dpi=300)
     plt.close()
+    
+import itertools    
+# def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, output_path):
+#     all_cms = []
+
+#     for path in model_paths:
+#         model = LitModel.load_from_checkpoint(checkpoint_path=path)
+#         model.eval()
+#         model.to(device)
+
+#         all_preds = []
+#         all_labels = []
+
+#         with torch.no_grad():
+#             for batch in test_loader:
+#                 x, y = batch
+#                 x = x.to(device)
+#                 y = y.to(device)
+#                 _, y_pred = model(x)
+#                 all_preds.append(y_pred.cpu().argmax(dim=1))
+#                 all_labels.append(y.cpu())
+
+#         all_preds = torch.cat(all_preds)
+#         all_labels = torch.cat(all_labels)
+
+#         # Compute confusion matrix for the current run
+#         cm = confusion_matrix(all_labels, all_preds)
+#         all_cms.append(cm)
+
+#     # Convert to numpy array for easier manipulation
+#     all_cms = np.array(all_cms)
+
+#     # Compute mean and standard deviation of confusion matrices
+#     mean_cm = np.mean(all_cms, axis=0)
+#     std_cm = np.std(all_cms, axis=0)
+#     mean_cm_percent = 100 * mean_cm.astype('float') / mean_cm.sum(axis=1)[:, np.newaxis]
+#     std_cm_percent = 100 * std_cm.astype('float') / (std_cm.sum(axis=1)[:, np.newaxis] + 1e-6)
+
+#     # Plot average confusion matrix with percentages and standard deviations
+#     plt.figure(figsize=(10, 8))
+#     ax = sns.heatmap(mean_cm_percent, annot=False, fmt=".2f", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 16},vmin=0, vmax=100)
+
+#     # Increase font size for colorbar values
+#     cbar = ax.collections[0].colorbar
+#     cbar.ax.tick_params(labelsize=16)
+    
+#     for i, j in itertools.product(range(mean_cm.shape[0]), range(mean_cm.shape[1])):
+#         text_value = f"{int(mean_cm[i, j])} ± {int(std_cm[i, j])}\n({mean_cm_percent[i, j]:.1f} ± {std_cm_percent[i, j]:.1f}%)"
+#         ax.text(j + 0.5, i + 0.5, text_value, horizontalalignment="center", verticalalignment="center", size=16,
+#                 color="white" if mean_cm_percent[i, j] > mean_cm_percent.max() / 2 else "black")
+
+#     plt.xlabel('Predicted', fontsize=16)
+#     plt.ylabel('True', fontsize=16)
+#     plt.title('Average Confusion Matrix', fontsize=18)
+#     plt.xticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=15)
+#     plt.yticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=15)
+#     plt.tight_layout()
+
+#     # Save the figure
+#     plt.savefig(output_path, dpi=300)
+#     plt.close()
+
+
+
+def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, output_path):
+    all_cms = []
+
+    for path in model_paths:
+        model = LitModel.load_from_checkpoint(checkpoint_path=path)
+        model.eval()
+        model.to(device)
+
+        all_preds = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch in test_loader:
+                x, y = batch
+                x = x.to(device)
+                y = y.to(device)
+                _, y_pred = model(x)
+                all_preds.append(y_pred.cpu().argmax(dim=1))
+                all_labels.append(y.cpu())
+
+        all_preds = torch.cat(all_preds)
+        all_labels = torch.cat(all_labels)
+
+        # Compute confusion matrix for the current run
+        cm = confusion_matrix(all_labels, all_preds)
+        all_cms.append(cm)
+
+    # Convert to numpy array for easier manipulation
+    all_cms = np.array(all_cms)
+
+    # Compute mean and standard deviation of confusion matrices
+    mean_cm = np.mean(all_cms, axis=0)
+    std_cm = np.std(all_cms, axis=0)
+    mean_cm_percent = 100 * mean_cm.astype('float') / mean_cm.sum(axis=1)[:, np.newaxis]
+    std_cm_percent = 100 * std_cm.astype('float') / (std_cm.sum(axis=1)[:, np.newaxis] + 1e-6)
+
+    # Plot average confusion matrix with percentages and standard deviations
+    plt.figure(figsize=(6, 6))  # Increased figure size
+    ax = sns.heatmap(mean_cm_percent, annot=False, fmt=".2f", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 14}, vmin=0, vmax=100)
+
+    # Increase font size for colorbar values
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=14)
+    
+    for i, j in itertools.product(range(mean_cm.shape[0]), range(mean_cm.shape[1])):
+        text_value = f"{int(mean_cm[i, j])} ± {int(std_cm[i, j])}\n({mean_cm_percent[i, j]:.1f} ±\n {std_cm_percent[i, j]:.1f}%)"
+        # Dynamically adjust font size if necessary
+        font_size = 14 if len(text_value) < 30 else 12  # Adjust size based on content length
+        ax.text(j + 0.5, i + 0.5, text_value, ha="center", va="center", fontsize=font_size,
+                color="white" if mean_cm_percent[i, j] > 50 else "black")
+
+    plt.xlabel('Predicted', fontsize=16)
+    plt.ylabel('True', fontsize=16)
+    plt.title('Average Confusion Matrix', fontsize=16)
+    plt.xticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=14)
+    plt.yticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=14)
+    plt.tight_layout()
+
+    # Save the figure
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+
+    
+    
     
 def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     model.eval()
@@ -155,20 +330,23 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
     # Plot all ROC curves
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(6, 6))
     colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
     for i, color in zip(range(num_classes), colors):
-        plt.plot(fpr[i], tpr[i], color=color, lw=2,
-                 label='ROC curve of class {0} (area = {1:0.2f})'
+        plt.plot(fpr[i], tpr[i], color=color, lw=4,
+                 label='{0} (area = {1:0.2f})'
                        ''.format(class_names[i], roc_auc[i]))
 
-    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.plot([0, 1], [0, 1], 'k--', lw=3)
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate', fontsize=15)
-    plt.ylabel('True Positive Rate', fontsize=15)
-    plt.title('Receiver Operating Characteristic to Multi-class', fontsize=18)
-    plt.legend(loc="lower right", fontsize=12)
+    plt.xlabel('False Positive Rate', fontsize=16)
+    plt.ylabel('True Positive Rate', fontsize=16)
+    plt.title('Multi-Class Receiver Operating Characteristic', fontsize=16)
+    plt.legend(loc="lower right", fontsize=14)
+
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
 
     # Add grid lines
     plt.grid(True)
@@ -178,9 +356,6 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     plt.close()
 
     
-
-
-
 
 def extract_scalar_from_events(event_paths, scalar_name):
     scalar_values = []
@@ -221,9 +396,9 @@ def save_learning_curves(log_dir, output_path):
 
     # Plot learning curves if both scalars are available
     if train_loss and val_loss:
-        plt.figure(figsize=(8, 6))
-        plt.plot(train_loss, label='Training Loss', color='blue', lw=2)
-        plt.plot(val_loss, label='Validation Loss', color='orange', lw=2)
+        plt.figure(figsize=(6, 4))
+        plt.plot(train_loss, label='Training Loss', color='blue', lw=3)
+        plt.plot(val_loss, label='Validation Loss', color='orange', lw=3)
         plt.xlabel('Epochs', fontsize=15)
         plt.ylabel('Loss', fontsize=15)
         plt.title('Learning Curves', fontsize=18)
@@ -257,9 +432,9 @@ def save_accuracy_curves(log_dir, output_path):
 
     # Plot accuracy curves if both scalars are available
     if train_acc and val_acc:
-        plt.figure(figsize=(8, 6))
-        plt.plot(train_acc, label='Training Accuracy', color='green', lw=2)
-        plt.plot(val_acc, label='Validation Accuracy', color='red', lw=2)
+        plt.figure(figsize=(6, 4))
+        plt.plot(train_acc, label='Training Accuracy', color='green', lw=3)
+        plt.plot(val_acc, label='Validation Accuracy', color='red', lw=3)
         plt.xlabel('Epochs', fontsize=15)
         plt.ylabel('Accuracy', fontsize=15)
         plt.title('Accuracy Curves', fontsize=18)
@@ -279,8 +454,8 @@ def save_accuracy_curves(log_dir, output_path):
 import glob
 from LitModel import LitModel
 
-def main(Params):
 
+def main(Params):
     # Name of dataset
     Dataset = Params['Dataset']
 
@@ -296,22 +471,26 @@ def main(Params):
     print('\nStarting Experiments...')
     
     numRuns = 3
+    s_rate = Params['sample_rate']
+    new_dir = Params["new_dir"]
     
-    run_number = 0
-
-    new_dir = Params["new_dir"]  
-    
-    print("\nDataset sample rate: ", Params['sample_rate'])
+    print("\nDataset sample rate: ", s_rate)
     print("\nModel name: ", model_name, "\n")
     
-    data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
+    data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=s_rate)
     data_module.prepare_data()
 
     torch.set_float32_matmul_precision('medium')
     
-    s_rate=Params['sample_rate']
-    
-    best_model_path = glob.glob(f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}/version_0/checkpoints/*.ckpt")[0]
+    # Collecting model paths for average confusion matrix calculation
+    model_paths = []
+    for run_number in range(numRuns):
+        best_model_path = glob.glob(f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}/version_0/checkpoints/*.ckpt")[0]
+        model_paths.append(best_model_path)
+
+    # Use the first run's model for individual plots
+    best_model_path = model_paths[0]
+    run_number = 0
 
     best_model = LitModel.load_from_checkpoint(
         checkpoint_path=best_model_path,
@@ -322,7 +501,6 @@ def main(Params):
         pretrained_loaded=True,
         run_number=run_number
     )
-        
 
     # Get the test dataloader from the data module
     test_loader = data_module.test_dataloader()
@@ -335,38 +513,47 @@ def main(Params):
     os.makedirs(output_dir, exist_ok=True)
     
     # Define output path for the ROC plot
-    output_path = os.path.join(output_dir, "roc_curve.png")
+    roc_output_path = os.path.join(output_dir, "roc_curve.png")
     
     # Plot ROC curves and save the figure
-    plot_multiclass_roc(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=output_path)
+    plot_multiclass_roc(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=roc_output_path)
         
-    # Define output path for the confusion matrix plot
+    # Define output path for the confusion matrix plot with percentages
+    #cm_prc_output_path = os.path.join(output_dir, "confusion_matrix_prc.png")
+        
+    # Save confusion matrix with percentages
+    #save_confusion_matrix_with_percentage(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_prc_output_path)
+    
+    
     cm_output_path = os.path.join(output_dir, "confusion_matrix.png")
-        
-    # Save confusion matrix
     save_confusion_matrix(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_output_path)
+    
+    
+    # Define output path for the average confusion matrix plot
+    avg_cm_output_path = os.path.join(output_dir, "avg_confusion_matrix.png")
+    
+    # Save average confusion matrix across runs
+    save_avg_confusion_matrix(model_paths, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=avg_cm_output_path)
       
     # Define output path for the t-SNE plot
-    tsne_output_path = os.path.join(output_dir, "tsne_plot.png")
+    #tsne_output_path = os.path.join(output_dir, "tsne_plot.png")
         
     # Save t-SNE plot
-    save_tsne_plot(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=tsne_output_path)
+    #save_tsne_plot(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=tsne_output_path)
      
     
     # Define output path for the learning curves plot
-    learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
+    #learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
     
     # Save learning curves
-    log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
-    save_learning_curves(log_dir, learning_curves_output_path)
+    #log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
+    #save_learning_curves(log_dir, learning_curves_output_path)
     
     # Define output path for the accuracy curves plot
-    accuracy_curves_output_path = os.path.join(output_dir, "accuracy_curves.png")
+    #accuracy_curves_output_path = os.path.join(output_dir, "accuracy_curves.png")
     
     # Save accuracy curves
-    save_accuracy_curves(log_dir, accuracy_curves_output_path)
-        
-
+    #save_accuracy_curves(log_dir, accuracy_curves_output_path)
 
 
 def parse_args():
@@ -376,7 +563,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_16k #CNN_14_16k #ViT-B/16
+    parser.add_argument('--model', type=str, default='regnety_320', #CNN_14_32k #regnety_320 #ViT-B/16
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

@@ -45,6 +45,7 @@ class SSAudioDataModule(L.LightningDataModule):
         self.class_to_idx = {'Cargo': 0, 'Passengership': 1, 'Tanker': 2, 'Tug': 3}
         self.prepared = False
         self.sample_rate = sample_rate
+        self.raw_data_list = []  # To store raw data
 
     def list_wav_files(self):
         wav_files = []
@@ -72,8 +73,16 @@ class SSAudioDataModule(L.LightningDataModule):
             }
             data_list.append(file_data)
         print(f'Read {len(data_list)} .wav files')
+        self.raw_data_list = data_list  # Save the raw data list for later access
         return data_list
-
+    
+    def get_raw_audio_data(self):
+        if self.raw_data_list:
+            # Return the first raw audio data from the list
+            return self.raw_data_list[0]['data']
+        else:
+            print("No raw audio data available.")
+            return None
 
     def organize_data(self, data_list):
         organized_data = defaultdict(lambda: defaultdict(list))
@@ -255,7 +264,8 @@ class SSAudioDataModule(L.LightningDataModule):
         self.train_data = []
         self.val_data = []
         self.test_data = []
-        
+        self.raw_data_list = [] 
+
         first_file = True  
         current_split = None
         with open(filepath, 'r') as f:
@@ -285,6 +295,9 @@ class SSAudioDataModule(L.LightningDataModule):
                             'sampling_rate': sampling_rate,
                             'data': data
                         }
+                        
+                        self.raw_data_list.append(file_data)  # Populate raw data list
+                        
                         if current_split == 'train':
                             self.train_data.append(file_data)
                         elif current_split == 'val':
@@ -294,6 +307,7 @@ class SSAudioDataModule(L.LightningDataModule):
 
         #if not self.prepared:
         self.check_data_leakage()
+        self.get_raw_audio_data()
         self.print_class_distribution()
         self.global_min, self.global_max = self.get_min_max_train()
         self.train_data = self.normalize_data(self.train_data, self.global_min, self.global_max)

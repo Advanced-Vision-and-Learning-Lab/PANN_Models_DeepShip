@@ -40,10 +40,10 @@ class MelSpectrogramExtractor(nn.Module):
                                                   pad_mode=pad_mode, 
                                                   freeze_parameters=True)
 
-        # Logmel feature extractor
         ref = 1.0
         amin = 1e-10
         top_db = None
+        
         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
         
@@ -51,68 +51,25 @@ class MelSpectrogramExtractor(nn.Module):
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
             freq_drop_width=8, freq_stripes_num=2)
         
+        self.bn0 = nn.BatchNorm2d(64)
+        
     def forward(self, waveform):
         spectrogram = self.spectrogram_extractor(waveform)
         log_mel_spectrogram = self.logmel_extractor(spectrogram)
-        augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
-        return augmented_log_mel_spectrogram
-
-
-# # import torch
-# # import torch.nn as nn
-# import matplotlib.pyplot as plt
-# # import pdb
-
-# class MelSpectrogramExtractor(nn.Module): 
-#     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
-#         super(MelSpectrogramExtractor, self).__init__()
         
-#         # Settings for Spectrogram
-#         window = 'hann'
-#         center = True
-#         pad_mode = 'reflect'
+        log_mel_spectrogram = log_mel_spectrogram.transpose(1, 3)
+        log_mel_spectrogram = self.bn0(log_mel_spectrogram)
+        log_mel_spectrogram = log_mel_spectrogram.transpose(1, 3)
         
-#         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
-#                                                   win_length=win_length, window=window, center=center, 
-#                                                   pad_mode=pad_mode, 
-#                                                   freeze_parameters=True)
-
-#         # Logmel feature extractor
-#         ref = 1.0
-#         amin = 1e-10
-#         top_db = None
-#         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
-#             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
+        if self.training:
+            log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+            
+        # Mixup on spectrogram
+        # if self.training and mixup_lambda is not None:
+        #     x = do_mixup(x, mixup_lambda)
         
-#         # Spec augmenter
-#         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
-#             freq_drop_width=8, freq_stripes_num=2)
         
-#     def forward(self, waveform):
-        
-#         spectrogram = self.spectrogram_extractor(waveform)
-#         log_mel_spectrogram = self.logmel_extractor(spectrogram)
-#         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
-        
-#         # Save spectrogram figure for the first sample in the batch
-#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'logmelspectrogram.png', dpi=300)
-#         pdb.set_trace()
-#         self.save_spectrogram_figure(augmented_log_mel_spectrogram[0], 'auglogmelspectrogram.png', dpi=300)
-#         return augmented_log_mel_spectrogram
-
-#     def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=300):
-#         spectrogram = spectrogram.squeeze().cpu().numpy()
-#         plt.figure(figsize=(6, 4))
-#         plt.imshow(spectrogram, aspect='auto', origin='lower')
-#         plt.colorbar(format='%+2.0f dB').set_label('Power')
-#         plt.title('Log Mel Spectrogram')
-#         plt.xlabel('Mel Bins')
-#         plt.ylabel('Time')
-#         plt.savefig(filename, dpi=dpi)
-#         plt.close()
-
-#         print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
-
+        return log_mel_spectrogram
 
 
 class CustomPANN(nn.Module):
@@ -133,17 +90,20 @@ class CustomPANN(nn.Module):
 class CustomTIMM(nn.Module):
     def __init__(self, model):
         super(CustomTIMM, self).__init__()
-        #self.fc = None
+
         if 'fc' in dir(model):
             self.fc = model.fc
             model.fc = nn.Sequential()
         elif 'classifier' in dir(model):
             self.fc = model.classifier
             model.classifier = nn.Sequential()
-        elif 'head' in dir(model):
-            self.fc = model.head
-            model.head = nn.Sequential()
-        
+       
+
+        elif 'head' in dir(model): 
+            self.fc = model.head.fc
+            model.head.fc =  nn.Sequential()
+
+
         self.backbone = model
 
     def forward(self, x):
@@ -230,7 +190,11 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
         'regnety_320': {
             'class': 'regnety_320', 
             'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
-        }
+        },
+        'convnextv2_tiny.fcmae': {
+            'class': 'convnextv2_tiny.fcmae', 
+            'sample_rate': 32000, 'window_size': 1024, 'hop_size': 320, 'mel_bins': 64, 'fmin': 50, 'fmax': 14000
+    }
     }
 
 
@@ -261,6 +225,7 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
               try:
                   state_dict = torch.load(weights_path)
                   model_ft.load_state_dict(state_dict['model'])
+                  print("\nPretrained PANN\n")
               except Exception as e:
                   raise RuntimeError(f"Error loading the model weights: {e}")
     
@@ -269,6 +234,8 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           model_ft.fc_audioset = nn.Linear(num_ftrs, num_classes)
           custom_model = CustomPANN(model_ft)
           mel_extractor = nn.Sequential() 
+          
+          
 
     
     else:
@@ -277,23 +244,41 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
     
           if use_pretrained and not pretrained_loaded:
               model_ft = timm.create_model(model_class, pretrained=True, in_chans=1)
+              print("\nPretrained TIMM\n")
           else:
               model_ft = timm.create_model(model_class, pretrained=False, in_chans=1)
     
           set_parameter_requires_grad(model_ft, feature_extract)
     
+          
+          #pdb.set_trace()
           if 'fc' in dir(model_ft):
             num_ftrs = model_ft.fc.in_features
             model_ft.fc = nn.Linear(num_ftrs, num_classes)
+
+                
           elif 'classifier' in dir(model_ft):
             num_ftrs = model_ft.classifier.in_features
-            model_ft.classifier = nn.Linear(num_ftrs, num_classes)
-          #elif 'head' in dir(model_ft):
-          elif 'head' in dir(model_ft) and hasattr(model_ft.head, 'fc'): 
-            num_ftrs = model_ft.head.fc.in_features
-            model_ft.head.fc = nn.Linear(num_ftrs, num_classes)
+            model_ft.classifier = nn.Linear(num_ftrs, num_classes)            
+            
+          #elif 'head' in dir(model_ft) and hasattr(model_ft.head, 'fc'): 
+ 
+              
+          elif 'head' in dir(model_ft):
+             if hasattr(model_ft.head, 'fc') and hasattr(model_ft.head.fc, 'in_features'):
+                 num_ftrs = model_ft.head.fc.in_features
+                 model_ft.head.fc = nn.Linear(num_ftrs, num_classes)
+             else:
+                # Handle cases where 'fc' does not exist or does not have 'in_features'
+                # This is model-specific and requires checking the preceding layers
+                if hasattr(model_ft.head, 'flatten'):
+                    num_ftrs = model_ft.head.flatten(torch.randn(1, *model_ft.head.norm.normalized_shape)).shape[1]
+                    model_ft.head.fc = nn.Linear(num_ftrs, num_classes)
+                else:
+                    raise ValueError("Model head does not have a suitable 'fc' layer or 'flatten' layer to determine input features.")
+
                     
-        
+          
           custom_model = CustomTIMM(model_ft)
           
           mel_extractor = MelSpectrogramExtractor(sample_rate=params['sample_rate'], 

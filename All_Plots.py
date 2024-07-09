@@ -166,65 +166,6 @@ def save_confusion_matrix_with_percentage(model, test_loader, class_names, devic
     plt.close()
     
 import itertools    
-# def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, output_path):
-#     all_cms = []
-
-#     for path in model_paths:
-#         model = LitModel.load_from_checkpoint(checkpoint_path=path)
-#         model.eval()
-#         model.to(device)
-
-#         all_preds = []
-#         all_labels = []
-
-#         with torch.no_grad():
-#             for batch in test_loader:
-#                 x, y = batch
-#                 x = x.to(device)
-#                 y = y.to(device)
-#                 _, y_pred = model(x)
-#                 all_preds.append(y_pred.cpu().argmax(dim=1))
-#                 all_labels.append(y.cpu())
-
-#         all_preds = torch.cat(all_preds)
-#         all_labels = torch.cat(all_labels)
-
-#         # Compute confusion matrix for the current run
-#         cm = confusion_matrix(all_labels, all_preds)
-#         all_cms.append(cm)
-
-#     # Convert to numpy array for easier manipulation
-#     all_cms = np.array(all_cms)
-
-#     # Compute mean and standard deviation of confusion matrices
-#     mean_cm = np.mean(all_cms, axis=0)
-#     std_cm = np.std(all_cms, axis=0)
-#     mean_cm_percent = 100 * mean_cm.astype('float') / mean_cm.sum(axis=1)[:, np.newaxis]
-#     std_cm_percent = 100 * std_cm.astype('float') / (std_cm.sum(axis=1)[:, np.newaxis] + 1e-6)
-
-#     # Plot average confusion matrix with percentages and standard deviations
-#     plt.figure(figsize=(10, 8))
-#     ax = sns.heatmap(mean_cm_percent, annot=False, fmt=".2f", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 16},vmin=0, vmax=100)
-
-#     # Increase font size for colorbar values
-#     cbar = ax.collections[0].colorbar
-#     cbar.ax.tick_params(labelsize=16)
-    
-#     for i, j in itertools.product(range(mean_cm.shape[0]), range(mean_cm.shape[1])):
-#         text_value = f"{int(mean_cm[i, j])} ± {int(std_cm[i, j])}\n({mean_cm_percent[i, j]:.1f} ± {std_cm_percent[i, j]:.1f}%)"
-#         ax.text(j + 0.5, i + 0.5, text_value, horizontalalignment="center", verticalalignment="center", size=16,
-#                 color="white" if mean_cm_percent[i, j] > mean_cm_percent.max() / 2 else "black")
-
-#     plt.xlabel('Predicted', fontsize=16)
-#     plt.ylabel('True', fontsize=16)
-#     plt.title('Average Confusion Matrix', fontsize=18)
-#     plt.xticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=15)
-#     plt.yticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=15)
-#     plt.tight_layout()
-
-#     # Save the figure
-#     plt.savefig(output_path, dpi=300)
-#     plt.close()
 
 
 
@@ -453,7 +394,59 @@ def save_accuracy_curves(log_dir, output_path):
 
 import glob
 from LitModel import LitModel
+import torch
+import torch.nn as nn
+from torchlibrosa.stft import Spectrogram, LogmelFilterBank
+from torchlibrosa.augmentation import SpecAugmentation
 
+# class MelSpectrogramExtractor(nn.Module): 
+#     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
+#         super(MelSpectrogramExtractor, self).__init__()
+        
+#         # Settings for Spectrogram
+#         window = 'hann'
+#         center = True
+#         pad_mode = 'reflect'
+        
+#         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
+#                                                   win_length=win_length, window=window, center=center, 
+#                                                   pad_mode=pad_mode, 
+#                                                   freeze_parameters=True)
+
+#         # Logmel feature extractor
+#         ref = 1.0
+#         amin = 1e-10
+#         top_db = None
+#         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
+#             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
+        
+#         # Spec augmenter
+#         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+#             freq_drop_width=8, freq_stripes_num=2)
+        
+#     def forward(self, waveform):
+        
+#         spectrogram = self.spectrogram_extractor(waveform)
+#         log_mel_spectrogram = self.logmel_extractor(spectrogram)
+#         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+        
+#         # Save spectrogram figure for the first sample in the batch
+#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'logmelspectrogram.png', dpi=300)
+#         self.save_spectrogram_figure(augmented_log_mel_spectrogram[0], 'auglogmelspectrogram.png', dpi=300)
+#         return augmented_log_mel_spectrogram
+
+#     def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=300):
+#         spectrogram = spectrogram.squeeze().cpu().numpy()
+#         plt.figure(figsize=(6, 4))
+#         plt.imshow(spectrogram, aspect='auto', origin='lower')
+#         plt.colorbar(format='%+2.0f dB').set_label('Power')
+#         plt.title('Log Mel Spectrogram')
+#         plt.xlabel('Mel Bins')
+#         plt.ylabel('Time Frames')
+#         plt.savefig(filename, dpi=dpi)
+#         plt.close()
+
+#         print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
 
 def main(Params):
     # Name of dataset
@@ -543,17 +536,17 @@ def main(Params):
      
     
     # Define output path for the learning curves plot
-    #learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
+    learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
     
     # Save learning curves
-    #log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
-    #save_learning_curves(log_dir, learning_curves_output_path)
+    log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
+    save_learning_curves(log_dir, learning_curves_output_path)
     
     # Define output path for the accuracy curves plot
-    #accuracy_curves_output_path = os.path.join(output_dir, "accuracy_curves.png")
+    accuracy_curves_output_path = os.path.join(output_dir, "accuracy_curves.png")
     
     # Save accuracy curves
-    #save_accuracy_curves(log_dir, accuracy_curves_output_path)
+    save_accuracy_curves(log_dir, accuracy_curves_output_path)
 
 
 def parse_args():
@@ -563,7 +556,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='regnety_320', #CNN_14_32k #regnety_320 #ViT-B/16
+    parser.add_argument('--model', type=str, default='regnety_320', #CNN_14_32k #regnety_320 #convnextv2_tiny.fcmae
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

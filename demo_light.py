@@ -84,6 +84,8 @@ def main(Params):
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
     
+    #pdb.set_trace()
+    
     s_rate=Params['sample_rate']
 
     torch.set_float32_matmul_precision('medium')
@@ -193,7 +195,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='densenet201', #CNN_14_16k #CNN_14_16k #ViT-B/16
+    parser.add_argument('--model', type=str, default='convnextv2_atto.fcmae', #CNN_14_16k #CNN_14_16k #ViT-B/16
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
@@ -215,7 +217,7 @@ def parse_args():
                         help='Number of epochs to train each model for (default: 50)')
     parser.add_argument('--resize_size', type=int, default=256,
                         help='Resize the image before center crop. (default: 256)')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=1e-5,
                         help='learning rate (default: 0.001)')
     parser.add_argument('--use-cuda', default=True, action=argparse.BooleanOptionalAction,
                         help='enables CUDA training')
@@ -223,7 +225,7 @@ def parse_args():
                         help='Audio feature for extraction')
     parser.add_argument('--optimizer', type=str, default='Adam',
                         help='Select optimizer')
-    parser.add_argument('--patience', type=int, default=5,
+    parser.add_argument('--patience', type=int, default=10,
                         help='Number of epochs to train each model for (default: 50)')
     parser.add_argument('--sample_rate', type=int, default=32000,
                         help='Dataset Sample Rate')

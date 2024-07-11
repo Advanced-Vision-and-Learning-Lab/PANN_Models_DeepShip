@@ -18,25 +18,18 @@ import torch.nn as nn
 
 # Local external libraries
 from Demo_Parameters import Parameters
-import pdb
-
-import torch.nn.functional as F
-import os
 
 import lightning as L
+from lightning import LightningModule
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 
-
-from lightning.pytorch.callbacks import RichProgressBar
-from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
-import torchmetrics
-
 from Datasets.Get_preprocessed_data import process_data
-
-from tqdm.auto import tqdm
+from lightning.pytorch.callbacks import LearningRateFinder
+from torch_lr_finder import LRFinder
+import pdb
 
 # This code uses a newer version of numpy while other packages use an older version of numpy
 # This is a simple workaround to avoid errors that arise from the deprecation of numpy data types
@@ -49,10 +42,21 @@ np.bool = bool  # module 'numpy' has no attribute 'bool'
 from SSDataModule import SSAudioDataModule
 
 from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
-from torchmetrics.classification import F1Score
 
 from LitModel import LitModel
 
+# class FineTuneLearningRateFinder(LearningRateFinder):
+#     def __init__(self, milestones, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.milestones = milestones
+
+#     def on_fit_start(self, *args, **kwargs):
+#         return
+
+#     def on_train_epoch_start(self, trainer, LightningModule):
+#         if trainer.current_epoch in self.milestones or trainer.current_epoch == 0:
+#             self.lr_find(trainer, LightningModule)
+            
 def main(Params):
 
     # Name of dataset
@@ -135,6 +139,16 @@ def main(Params):
             deterministic=False,
             logger=logger
         )
+        
+        # model = nn.Sequential(model_AST.mel_extractor, model_AST.model_ft)
+        # criterion = nn.CrossEntropyLoss()
+        # optimizer = torch.optim.Adam(model.parameters(), lr=1e-7, weight_decay=1e-2)
+        # lr_finder = LRFinder(model, optimizer, criterion, device="cuda")
+        # lr_finder.range_test(data_module.train_dataloader(), end_lr=100, num_iter=100)
+        # lr_finder.plot() # to inspect the loss-learning rate graph
+        # pdb.set_trace()
+        # lr_finder.reset() # to reset the model and optimizer to their initial state
+        
     
         trainer.fit(model=model_AST, datamodule=data_module)
     
@@ -193,9 +207,9 @@ def parse_args():
         description='Run histogram experiments for dataset')
     parser.add_argument('--save_results', default=True, action=argparse.BooleanOptionalAction,
                         help='Save results of experiments (default: True)')
-    parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
+    parser.add_argument('--folder', type=str, default='Saved_Models/Mixup_Test/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='convnextv2_atto.fcmae', #CNN_14_16k #CNN_14_16k #ViT-B/16
+    parser.add_argument('--model', type=str, default='mobilenetv3_large_100', #CNN_14_16k #CNN_14_16k #ViT-B/16
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
@@ -213,11 +227,11 @@ def parse_args():
                         help='input batch size for validation (default: 512)')
     parser.add_argument('--test_batch_size', type=int, default=128,
                         help='input batch size for testing (default: 256)')
-    parser.add_argument('--num_epochs', type=int, default=1,
+    parser.add_argument('--num_epochs', type=int, default=20,
                         help='Number of epochs to train each model for (default: 50)')
     parser.add_argument('--resize_size', type=int, default=256,
                         help='Resize the image before center crop. (default: 256)')
-    parser.add_argument('--lr', type=float, default=1e-5,
+    parser.add_argument('--lr', type=float, default=1e-3,
                         help='learning rate (default: 0.001)')
     parser.add_argument('--use-cuda', default=True, action=argparse.BooleanOptionalAction,
                         help='enables CUDA training')

@@ -24,6 +24,7 @@ import timm
 
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
+from Utils.pytorch_utils import Mixup, do_mixup
 
 
 class MelSpectrogramExtractor(nn.Module): 
@@ -53,6 +54,9 @@ class MelSpectrogramExtractor(nn.Module):
         
         self.bn0 = nn.BatchNorm2d(64)
         
+        #Initialize mixup augmenter
+        self.mixup_augmenter = Mixup(mixup_alpha=1.)
+        
     def forward(self, waveform):
         spectrogram = self.spectrogram_extractor(waveform)
         log_mel_spectrogram = self.logmel_extractor(spectrogram)
@@ -63,11 +67,15 @@ class MelSpectrogramExtractor(nn.Module):
         
         if self.training:
             log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+            self.lambdas = self.mixup_augmenter.get_lambda(batch_size=log_mel_spectrogram.shape[0])
             
-        # Mixup on spectrogram
-        # if self.training and mixup_lambda is not None:
-        #     x = do_mixup(x, mixup_lambda)
-        
+            #Convert to tensors on same device as data
+            self.lambdas = torch.from_numpy(self.lambdas).to(log_mel_spectrogram.device).type(log_mel_spectrogram.type())
+            
+            #Perform mixup
+            log_mel_spectrogram = do_mixup(log_mel_spectrogram, self.lambdas)
+        else:
+            self.lambdas = None
         
         return log_mel_spectrogram
 
@@ -79,10 +87,23 @@ class CustomPANN(nn.Module):
         self.fc = model.fc_audioset
         model.fc_audioset = nn.Sequential()
         
+        #Initialize mixup augmenter
+        self.mixup_augmenter = Mixup(mixup_alpha=1.)
+        
         self.backbone = model
 
     def forward(self, x):
-        features = self.backbone(x)
+        
+        if self.training:
+            self.lambdas = self.mixup_augmenter.get_lambda(batch_size=x.shape[0])
+            
+            #Convert to tensors on same device as data
+            self.lambdas = torch.from_numpy(self.lambdas).to(x.device).type(x.type())
+            
+        else:
+            self.lambdas = None
+            
+        features = self.backbone(x, mixup_lambda=self.lambdas)
         predictions = self.fc(features)
         return features, predictions
     

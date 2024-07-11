@@ -20,6 +20,7 @@ import os
 import lightning as L
 import torchmetrics
 from Utils.Network_functions import initialize_model
+from Utils.pytorch_utils import do_mixup
 
 # This code uses a newer version of numpy while other packages use an older version of numpy
 # This is a simple workaround to avoid errors that arise from the deprecation of numpy data types
@@ -35,7 +36,7 @@ class LitModel(L.LightningModule):
         
         self.learning_rate = Params['lr']
         self.run_number = run_number
-
+        self.num_classes = num_classes
         self.model_ft, self.mel_extractor = initialize_model(
             model_name, 
             use_pretrained=Params['use_pretrained'], 
@@ -44,7 +45,6 @@ class LitModel(L.LightningModule):
             pretrained_loaded=pretrained_loaded 
         )
 
-        
         # self.test_preds = []
         # self.test_labels = []
         # self.test_features = []
@@ -67,11 +67,23 @@ class LitModel(L.LightningModule):
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
         features, y_pred = self(x) 
-        loss = F.cross_entropy(y_pred, y)
+        
+        #Perform mixup
+        y_one_hot = F.one_hot(y,num_classes=self.num_classes)
+        
+        try:
+            #For PANN models
+            y_one_hot = do_mixup(y_one_hot,self.model_ft.lambdas)
+            
+        except:
+            #For TIMM models
+            y_one_hot = do_mixup(y_one_hot,self.mel_extractor.lambdas)
+        
+        loss = F.cross_entropy(y_pred, y_one_hot)
         
         #self.train_acc.update(y_pred, y)
-        
-        self.train_acc(y_pred, y)
+        self.train_acc(y_pred, y_one_hot)
+        # self.train_acc(y_pred, y)
         self.log('train_acc', self.train_acc, on_step=False, on_epoch=True)
         self.log('loss', loss, on_step=True, on_epoch=True)
         

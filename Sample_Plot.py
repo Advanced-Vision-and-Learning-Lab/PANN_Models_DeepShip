@@ -36,9 +36,11 @@ import torch
 import torch.nn as nn
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
+from Utils.pytorch_utils import Mixup, do_mixup
 
 
-# Define the MelSpectrogramExtractor class
+import pdb
+
 class MelSpectrogramExtractor(nn.Module): 
     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
         super(MelSpectrogramExtractor, self).__init__()
@@ -48,36 +50,81 @@ class MelSpectrogramExtractor(nn.Module):
         center = True
         pad_mode = 'reflect'
         
-        self.spectrogram_extractor = Spectrogram(n_fft=n_fft, hop_length=hop_length, 
+        self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
                                                   win_length=win_length, window=window, center=center, 
                                                   pad_mode=pad_mode, 
-                                                  power=2.0, freeze_parameters=True)
+                                                  freeze_parameters=True)
 
-        # Logmel feature extractor
         ref = 1.0
         amin = 1e-10
         top_db = None
+        
         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
         
-    def forward(self, waveform):
-        waveform = waveform.unsqueeze(0) if waveform.dim() == 1 else waveform
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+        
+        self.bn0 = nn.BatchNorm2d(64)
+        
+        # Initialize mixup augmenter
+        self.mixup_augmenter = Mixup(mixup_alpha=1.)
+        
+    def forward(self, waveform, augment_spec=False, augment_mixup=False):
+        # Ensure the waveform is in the shape (batch_size, data_length)
+                
+
+        
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
+        
         spectrogram = self.spectrogram_extractor(waveform)
         log_mel_spectrogram = self.logmel_extractor(spectrogram)
+        
+        log_mel_spectrogram = log_mel_spectrogram.transpose(1, 3)
+        log_mel_spectrogram = self.bn0(log_mel_spectrogram)
+        log_mel_spectrogram = log_mel_spectrogram.transpose(1, 3)
+        
+        if augment_spec:
+            log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
+        
+        if augment_mixup:
+            self.lambdas = self.mixup_augmenter.get_lambda(batch_size=log_mel_spectrogram.shape[0])
+            self.lambdas = torch.from_numpy(self.lambdas).to(log_mel_spectrogram.device).type(log_mel_spectrogram.type())
+            log_mel_spectrogram = do_mixup(log_mel_spectrogram, self.lambdas)
+        
         return log_mel_spectrogram
 
-    def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=500):
-        spectrogram = spectrogram.squeeze().cpu().numpy()
+
+
+
+    def save_spectrogram_figure(self, spectrogram, filename, dpi=500):
+        if spectrogram.size(0) == 0:
+            raise ValueError("Spectrogram has zero samples, cannot save the figure.")
+        
         plt.figure(figsize=(6, 4))
-        plt.imshow(spectrogram, aspect='auto', origin='lower')
-        plt.colorbar(format='%+2.0f dB').set_label('Power')
-        plt.title('Log Mel Spectrogram')
-        plt.xlabel('Mel Bins')
-        plt.ylabel('Time Frames')
+        # Ensure the spectrogram tensor is detached and moved to CPU for visualization
+        spectrogram_data = spectrogram.detach().cpu().numpy()
+    
+        # Since spectrogram_data might be a batch, ensure to take the first one for visualization
+        if spectrogram_data.ndim > 3:
+            spectrogram_data = spectrogram_data[0, 0]  # Assuming spectrogram is (batch_size, channels, freq_bins, time_steps)
+        elif spectrogram_data.ndim == 3:
+            spectrogram_data = spectrogram_data[0]  # Assuming (channels, freq_bins, time_steps) for a single example
+        print('spec shape:', spectrogram_data.shape)
+        plt.imshow(spectrogram_data, aspect='auto', origin='lower')
+        plt.colorbar(label='dB')
+        plt.xlabel('Time (Frames)')
+        plt.ylabel('Frequency Bins')
+        #plt.title('Mel Spectrogram')
+        #plt.axis('off')  # Turn off the axis
         plt.tight_layout()
-        plt.savefig(filename, dpi=dpi)
+        plt.savefig(filename, dpi=500)
         plt.close()
-        print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
+
+
+
 
 
 def main(Params):
@@ -99,42 +146,52 @@ def main(Params):
     train_loader = data_module.train_dataloader()
     batch = next(iter(train_loader))
     sample_normalized, _ = batch  # Normalized sample
-    raw_audio = data_module.get_raw_audio_data()  # Retrieve raw audio data
 
-    # Convert normalized audio tensor to NumPy array for processing
-    audio_tensor_normalized = sample_normalized[0].numpy() if isinstance(sample_normalized[0], torch.Tensor) else sample_normalized[0]
-    
+    # Convert the entire batch of normalized audio tensors to NumPy array for processing, then to torch tensor
+    audio_tensor_normalized_torch = sample_normalized.float()
+
     # Instantiate the MelSpectrogramExtractor with appropriate parameters
     mel_extractor = MelSpectrogramExtractor(sample_rate=sample_rate)
     
+    # Ensure we have at least two samples for mixup, adjust slice if needed
+    if audio_tensor_normalized_torch.shape[0] < 2:
+        print("Batch size less than 2, cannot perform Mixup.")
+        return
+
+    # Original spectrogram
+    spectrogram = mel_extractor(audio_tensor_normalized_torch[:2])  # Take the first two samples for demonstration
+    mel_extractor.save_spectrogram_figure(spectrogram[0], 'features/original_spectrogram.png', dpi=500)  # Save the first spectrogram
+    
+    # Spectrogram with SpecAugmentation
+    spectrogram_specaug = mel_extractor(audio_tensor_normalized_torch[:2], augment_spec=True)
+    mel_extractor.save_spectrogram_figure(spectrogram_specaug[0], 'features/specaug_spectrogram.png', dpi=500)  # Save the first augmented spectrogram
+
+    # Spectrogram with Mixup
+    spectrogram_mixup = mel_extractor(audio_tensor_normalized_torch[:2], augment_spec=True, augment_mixup=True)
+    if spectrogram_mixup.size(0) > 0:
+        mel_extractor.save_spectrogram_figure(spectrogram_mixup[0], 'features/mixup_spectrogram.png', dpi=500)  # Save the first mixup spectrogram
+    else:
+        print("Mixup spectrogram could not be generated.")
+
+        
+    
+    audio_tensor_normalized = sample_normalized[0].numpy() if isinstance(sample_normalized[0], torch.Tensor) else sample_normalized[0]
+        
     # Convert the audio_tensor_normalized to torch tensor and compute spectrogram
     audio_tensor_normalized_torch = torch.from_numpy(audio_tensor_normalized).float()
-    spectrogram = mel_extractor(audio_tensor_normalized_torch)
-    
-    # Save the spectrogram
-    mel_extractor.save_spectrogram_figure(spectrogram, 'features/normalized_audio_spectrogram.png', dpi=500)
 
-    # Plot the raw audio waveform
-    plt.figure(figsize=(6, 4))
-    plt.plot(raw_audio)  # Plotting the raw audio data directly
-    plt.title('Raw Audio Waveform')
-    plt.xlabel('Samples')
-    plt.ylabel('Amplitude')
-    plt.tight_layout()
-    plt.savefig('features/raw_audio_waveform_samples.png', dpi=500)
-
-    # Plot the normalized audio waveform
+    #Plot the normalized audio waveform
     plt.figure(figsize=(6, 4))
     plt.plot(audio_tensor_normalized)  # Plotting the normalized audio data
-    plt.title('Normalized Audio Waveform')
+    #plt.title('Normalized Audio Waveform')
     plt.xlabel('Samples')
     plt.ylabel('Normalized Amplitude')
+    plt.axis('off')  # Turn off the axis
     plt.tight_layout()
-    plt.savefig('features/normalized_audio_waveform_samples.png', dpi=500)
+    plt.savefig('features/normalized_audio_waveform.png', dpi=500)
 
     # Print shapes for documentation in your paper
-    print("Shape of the raw audio data:", raw_audio.shape)
-    print("Shape of the normalized audio data:", audio_tensor_normalized.shape)
+    print("normalized audio data:", audio_tensor_normalized.shape)
 
 
 

@@ -348,9 +348,10 @@ class SSAudioDataModule(L.LightningDataModule):
         pass
 
 
+    #Batch size is double if mixup
     def train_dataloader(self):
         train_dataset = SSAudioDataset(self.train_data, self.class_to_idx)
-        return DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        return DataLoader(train_dataset, batch_size=self.batch_size*2, shuffle=True, num_workers=8, pin_memory=True)
 
     def val_dataloader(self):
         val_dataset = SSAudioDataset(self.val_data, self.class_to_idx)

@@ -220,11 +220,11 @@ def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, out
         ax.text(j + 0.5, i + 0.5, text_value, ha="center", va="center", fontsize=font_size,
                 color="white" if mean_cm_percent[i, j] > 50 else "black")
 
-    plt.xlabel('Predicted', fontsize=16)
-    plt.ylabel('True', fontsize=16)
-    plt.title('Average Confusion Matrix', fontsize=16)
-    plt.xticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=14)
-    plt.yticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=14)
+    plt.xlabel('Predicted', fontsize=14)
+    plt.ylabel('True', fontsize=14)
+    plt.title('Average Confusion Matrix', fontsize=14)
+    plt.xticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=12)
+    plt.yticks(ticks=np.arange(len(class_names)) + 0.5, labels=class_names, fontsize=12)
     plt.tight_layout()
 
     # Save the figure
@@ -394,59 +394,7 @@ def save_accuracy_curves(log_dir, output_path):
 
 import glob
 from LitModel import LitModel
-import torch
-import torch.nn as nn
-from torchlibrosa.stft import Spectrogram, LogmelFilterBank
-from torchlibrosa.augmentation import SpecAugmentation
 
-# class MelSpectrogramExtractor(nn.Module): 
-#     def __init__(self, sample_rate=32000, n_fft=1024, win_length=1024, hop_length=320, n_mels=64, fmin=50, fmax=14000):
-#         super(MelSpectrogramExtractor, self).__init__()
-        
-#         # Settings for Spectrogram
-#         window = 'hann'
-#         center = True
-#         pad_mode = 'reflect'
-        
-#         self.spectrogram_extractor = Spectrogram(n_fft=win_length, hop_length=hop_length, 
-#                                                   win_length=win_length, window=window, center=center, 
-#                                                   pad_mode=pad_mode, 
-#                                                   freeze_parameters=True)
-
-#         # Logmel feature extractor
-#         ref = 1.0
-#         amin = 1e-10
-#         top_db = None
-#         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
-#             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
-        
-#         # Spec augmenter
-#         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
-#             freq_drop_width=8, freq_stripes_num=2)
-        
-#     def forward(self, waveform):
-        
-#         spectrogram = self.spectrogram_extractor(waveform)
-#         log_mel_spectrogram = self.logmel_extractor(spectrogram)
-#         augmented_log_mel_spectrogram = self.spec_augmenter(log_mel_spectrogram)
-        
-#         # Save spectrogram figure for the first sample in the batch
-#         self.save_spectrogram_figure(log_mel_spectrogram[0], 'logmelspectrogram.png', dpi=300)
-#         self.save_spectrogram_figure(augmented_log_mel_spectrogram[0], 'auglogmelspectrogram.png', dpi=300)
-#         return augmented_log_mel_spectrogram
-
-#     def save_spectrogram_figure(self, spectrogram, filename='spectrogram.png', dpi=300):
-#         spectrogram = spectrogram.squeeze().cpu().numpy()
-#         plt.figure(figsize=(6, 4))
-#         plt.imshow(spectrogram, aspect='auto', origin='lower')
-#         plt.colorbar(format='%+2.0f dB').set_label('Power')
-#         plt.title('Log Mel Spectrogram')
-#         plt.xlabel('Mel Bins')
-#         plt.ylabel('Time Frames')
-#         plt.savefig(filename, dpi=dpi)
-#         plt.close()
-
-#         print(f'Saved spectrogram figure with shape: {spectrogram.shape}')
 
 def main(Params):
     # Name of dataset
@@ -501,6 +449,9 @@ def main(Params):
     # Define class names
     class_names = ["Cargo", "Passengership", "Tanker", "Tug"]
     
+    # Extract class names dynamically from the class_to_idx dictionary
+    class_names = list(data_module.class_to_idx.keys())
+
     # Create directory if it doesn't exist
     output_dir = f"features/{model_name}_{s_rate}_Run{run_number}"
     os.makedirs(output_dir, exist_ok=True)
@@ -518,8 +469,8 @@ def main(Params):
     #save_confusion_matrix_with_percentage(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_prc_output_path)
     
     
-    cm_output_path = os.path.join(output_dir, "confusion_matrix.png")
-    save_confusion_matrix(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_output_path)
+    # cm_output_path = os.path.join(output_dir, "confusion_matrix.png")
+    # save_confusion_matrix(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_output_path)
     
     
     # Define output path for the average confusion matrix plot
@@ -556,7 +507,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='regnety_320', #CNN_14_32k #regnety_320 #convnextv2_tiny.fcmae
+    parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_32k #convnextv2_tiny.fcmae
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
@@ -578,7 +529,7 @@ def parse_args():
                         help='Number of epochs to train each model for (default: 50)')
     parser.add_argument('--resize_size', type=int, default=256,
                         help='Resize the image before center crop. (default: 256)')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=5e-5,
                         help='learning rate (default: 0.001)')
     parser.add_argument('--use-cuda', default=True, action=argparse.BooleanOptionalAction,
                         help='enables CUDA training')

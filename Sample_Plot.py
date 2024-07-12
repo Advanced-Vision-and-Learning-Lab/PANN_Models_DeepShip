@@ -114,11 +114,11 @@ class MelSpectrogramExtractor(nn.Module):
             spectrogram_data = spectrogram_data[0]  # Assuming (channels, freq_bins, time_steps) for a single example
         print('spec shape:', spectrogram_data.shape)
         plt.imshow(spectrogram_data, aspect='auto', origin='lower')
-        plt.colorbar(label='dB')
-        plt.xlabel('Time (Frames)')
-        plt.ylabel('Frequency Bins')
+        #plt.colorbar(label='dB')
+        #plt.xlabel('Time (Frames)')
+        #plt.ylabel('Frequency Bins')
         #plt.title('Mel Spectrogram')
-        #plt.axis('off')  # Turn off the axis
+        plt.axis('off')  # Turn off the axis
         plt.tight_layout()
         plt.savefig(filename, dpi=500)
         plt.close()
@@ -184,8 +184,8 @@ def main(Params):
     plt.figure(figsize=(6, 4))
     plt.plot(audio_tensor_normalized)  # Plotting the normalized audio data
     #plt.title('Normalized Audio Waveform')
-    plt.xlabel('Samples')
-    plt.ylabel('Normalized Amplitude')
+    #plt.xlabel('Samples')
+    #plt.ylabel('Normalized Amplitude')
     plt.axis('off')  # Turn off the axis
     plt.tight_layout()
     plt.savefig('features/normalized_audio_waveform.png', dpi=500)

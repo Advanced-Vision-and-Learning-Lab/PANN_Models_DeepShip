@@ -14,8 +14,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import pdb
-
 import os
 import requests
 
@@ -272,7 +270,7 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           set_parameter_requires_grad(model_ft, feature_extract)
     
           
-          #pdb.set_trace()
+
           if 'fc' in dir(model_ft):
             num_ftrs = model_ft.fc.in_features
             model_ft.fc = nn.Linear(num_ftrs, num_classes)
@@ -282,16 +280,13 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
             num_ftrs = model_ft.classifier.in_features
             model_ft.classifier = nn.Linear(num_ftrs, num_classes)            
             
-          #elif 'head' in dir(model_ft) and hasattr(model_ft.head, 'fc'): 
- 
-              
+
           elif 'head' in dir(model_ft):
              if hasattr(model_ft.head, 'fc') and hasattr(model_ft.head.fc, 'in_features'):
                  num_ftrs = model_ft.head.fc.in_features
                  model_ft.head.fc = nn.Linear(num_ftrs, num_classes)
              else:
                 # Handle cases where 'fc' does not exist or does not have 'in_features'
-                # This is model-specific and requires checking the preceding layers
                 if hasattr(model_ft.head, 'flatten'):
                     num_ftrs = model_ft.head.flatten(torch.randn(1, *model_ft.head.norm.normalized_shape)).shape[1]
                     model_ft.head.fc = nn.Linear(num_ftrs, num_classes)

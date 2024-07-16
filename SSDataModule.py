@@ -42,10 +42,18 @@ class SSAudioDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.test_size = test_size
         self.val_size = val_size
-        self.class_to_idx = {'Cargo': 0, 'Passengership': 1, 'Tanker': 2, 'Tug': 3}
+        #self.class_to_idx = {'Cargo': 0, 'Passengership': 1, 'Tanker': 2, 'Tug': 3}
+        self.class_to_idx = self.create_class_index_mapping()  # Dynamically create class indices
+
         self.prepared = False
         self.sample_rate = sample_rate
         self.raw_data_list = []  # To store raw data
+
+    def create_class_index_mapping(self):
+        class_names = [d for d in os.listdir(self.data_dir) if os.path.isdir(os.path.join(self.data_dir, d))]
+        class_to_idx = {class_name: i for i, class_name in enumerate(sorted(class_names))}
+        print(f"Class to index mapping: {class_to_idx}")
+        return class_to_idx
 
     def list_wav_files(self):
         wav_files = []
@@ -280,7 +288,7 @@ class SSAudioDataModule(L.LightningDataModule):
                 elif line and not line.startswith('Train indices and paths:') and not line.startswith('Validation indices and paths:') and not line.startswith('Test indices and paths:'):
                     if current_split:
                         idx, file_path = line.split(': ', 1)
-                        # Adjust the file path to include the correct sampling rate
+                        # Adjust the file path to include the sampling rate
                         parts = file_path.split('/')
                         parts[3] = f'Segments_5s_{t_rate}hz'  # Adjust the directory to reflect the target sampling rate
                         adjusted_file_path = '/'.join(parts)
@@ -296,7 +304,7 @@ class SSAudioDataModule(L.LightningDataModule):
                             'data': data
                         }
                         
-                        self.raw_data_list.append(file_data)  # Populate raw data list
+                        self.raw_data_list.append(file_data)  
                         
                         if current_split == 'train':
                             self.train_data.append(file_data)

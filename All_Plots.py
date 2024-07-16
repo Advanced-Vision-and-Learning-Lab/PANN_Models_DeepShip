@@ -27,97 +27,8 @@ from SSDataModule import SSAudioDataModule
 from sklearn.metrics import roc_curve, auc
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-from sklearn.manifold import TSNE
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-def save_tsne_plot(model, test_loader, class_names, device, output_path):
-    model.eval()
-    model.to(device)
-
-    all_features = []
-    all_labels = []
-
-    with torch.no_grad():
-        for batch in test_loader:
-            x, y = batch
-            x = x.to(device)
-            y = y.to(device)
-            features, _ = model(x)
-            all_features.append(features.cpu())
-            all_labels.append(y.cpu())
-
-    all_features = torch.cat(all_features)
-    all_labels = torch.cat(all_labels)
-
-    # Perform t-SNE
-    tsne = TSNE(n_components=2, random_state=42)
-    tsne_results = tsne.fit_transform(all_features)
-
-    # Plot t-SNE
-    plt.figure(figsize=(6, 4))
-    colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'red'])
-    for i, color in zip(range(len(class_names)), colors):
-        indices = all_labels == i
-        plt.scatter(tsne_results[indices, 0], tsne_results[indices, 1], label=class_names[i], color=color, alpha=0.7, s=50)  # s=50 for larger points
-    plt.xlabel('t-SNE Component 1', fontsize=15)
-    plt.ylabel('t-SNE Component 2', fontsize=15)
-    plt.title('t-SNE Plot', fontsize=18)
-    plt.legend(loc="best", fontsize=10)
-    plt.grid(True)
-
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    # Save the figure
-    plt.savefig(output_path, dpi=300)
-    plt.close()
-    
-def save_confusion_matrix(model, test_loader, class_names, device, output_path):
-    model.eval()
-    model.to(device)
-
-    all_preds = []
-    all_labels = []
-
-    with torch.no_grad():
-        for batch in test_loader:
-            x, y = batch
-            x = x.to(device)
-            y = y.to(device)
-            _, y_pred = model(x)
-            all_preds.append(y_pred.cpu().argmax(dim=1))
-            all_labels.append(y.cpu())
-
-    all_preds = torch.cat(all_preds)
-    all_labels = torch.cat(all_labels)
-
-    # Compute confusion matrix
-    cm = confusion_matrix(all_labels, all_preds)
-
-    # Plot confusion matrix
-    plt.figure(figsize=(6, 4))
-    ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names, cbar=True, annot_kws={"size": 16})
-
-    # Make the annotations more visible
-    for t in ax.texts:
-        text_value = int(t.get_text())
-        t.set_size(16)  # Increase font size
-        if text_value > cm.max() / 2:
-            t.set_color('white')  # Use white text for dark squares
-        else:
-            t.set_color('black')  # Use black text for light squares
-
-    plt.xlabel('Predicted', fontsize=15)
-    plt.ylabel('True', fontsize=15)
-    plt.title('Confusion Matrix', fontsize=18)
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10)
-    plt.tight_layout()
-
-    # Save the figure
-    plt.savefig(output_path, dpi=300)
-    plt.close()
-    
     
 def save_confusion_matrix_with_percentage(model, test_loader, class_names, device, output_path):
     model.eval()
@@ -167,8 +78,6 @@ def save_confusion_matrix_with_percentage(model, test_loader, class_names, devic
     
 import itertools    
 
-
-
 def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, output_path):
     all_cms = []
 
@@ -215,7 +124,7 @@ def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, out
     
     for i, j in itertools.product(range(mean_cm.shape[0]), range(mean_cm.shape[1])):
         text_value = f"{int(mean_cm[i, j])} ± {int(std_cm[i, j])}\n({mean_cm_percent[i, j]:.1f} ±\n {std_cm_percent[i, j]:.1f}%)"
-        # Dynamically adjust font size if necessary
+
         font_size = 14 if len(text_value) < 30 else 12  # Adjust size based on content length
         ax.text(j + 0.5, i + 0.5, text_value, ha="center", va="center", fontsize=font_size,
                 color="white" if mean_cm_percent[i, j] > 50 else "black")
@@ -231,7 +140,6 @@ def save_avg_confusion_matrix(model_paths, test_loader, class_names, device, out
     plt.savefig(output_path, dpi=300)
     plt.close()
 
-    
     
     
 def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
@@ -297,7 +205,6 @@ def plot_multiclass_roc(model, test_loader, class_names, device, output_path):
     plt.close()
 
     
-
 def extract_scalar_from_events(event_paths, scalar_name):
     scalar_values = []
     for event_path in event_paths:
@@ -395,7 +302,6 @@ def save_accuracy_curves(log_dir, output_path):
 import glob
 from LitModel import LitModel
 
-
 def main(Params):
     # Name of dataset
     Dataset = Params['Dataset']
@@ -426,7 +332,7 @@ def main(Params):
     # Collecting model paths for average confusion matrix calculation
     model_paths = []
     for run_number in range(numRuns):
-        best_model_path = glob.glob(f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}/version_0/checkpoints/*.ckpt")[0]
+        best_model_path = glob.glob(f"tb_logs/{model_name}_b{batch_size}_{s_rate}_2/Run_{run_number}/{model_name}/version_0/checkpoints/*.ckpt")[0]
         model_paths.append(best_model_path)
 
     # Use the first run's model for individual plots
@@ -446,14 +352,11 @@ def main(Params):
     # Get the test dataloader from the data module
     test_loader = data_module.test_dataloader()
     
-    # Define class names
-    class_names = ["Cargo", "Passengership", "Tanker", "Tug"]
-    
     # Extract class names dynamically from the class_to_idx dictionary
     class_names = list(data_module.class_to_idx.keys())
 
     # Create directory if it doesn't exist
-    output_dir = f"features/{model_name}_{s_rate}_Run{run_number}"
+    output_dir = f"features/{model_name}_{s_rate}_2_Run{run_number}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Define output path for the ROC plot
@@ -463,15 +366,10 @@ def main(Params):
     plot_multiclass_roc(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=roc_output_path)
         
     # Define output path for the confusion matrix plot with percentages
-    #cm_prc_output_path = os.path.join(output_dir, "confusion_matrix_prc.png")
+    cm_prc_output_path = os.path.join(output_dir, "confusion_matrix_prc.png")
         
     # Save confusion matrix with percentages
-    #save_confusion_matrix_with_percentage(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_prc_output_path)
-    
-    
-    # cm_output_path = os.path.join(output_dir, "confusion_matrix.png")
-    # save_confusion_matrix(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_output_path)
-    
+    save_confusion_matrix_with_percentage(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=cm_prc_output_path)
     
     # Define output path for the average confusion matrix plot
     avg_cm_output_path = os.path.join(output_dir, "avg_confusion_matrix.png")
@@ -479,18 +377,11 @@ def main(Params):
     # Save average confusion matrix across runs
     save_avg_confusion_matrix(model_paths, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=avg_cm_output_path)
       
-    # Define output path for the t-SNE plot
-    #tsne_output_path = os.path.join(output_dir, "tsne_plot.png")
-        
-    # Save t-SNE plot
-    #save_tsne_plot(best_model, test_loader, class_names, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), output_path=tsne_output_path)
-     
-    
     # Define output path for the learning curves plot
     learning_curves_output_path = os.path.join(output_dir, "learning_curves.png")
     
     # Save learning curves
-    log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/Run_{run_number}/{model_name}"
+    log_dir = f"tb_logs/{model_name}_b{batch_size}_{s_rate}_2/Run_{run_number}/{model_name}"
     save_learning_curves(log_dir, learning_curves_output_path)
     
     # Define output path for the accuracy curves plot
@@ -507,7 +398,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/lightning/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_32k #convnextv2_tiny.fcmae
+    parser.add_argument('--model', type=str, default='convnextv2_tiny.fcmae', #CNN_14_32k #convnextv2_tiny.fcmae
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

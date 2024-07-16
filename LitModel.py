@@ -45,9 +45,6 @@ class LitModel(L.LightningModule):
             pretrained_loaded=pretrained_loaded 
         )
 
-        # self.test_preds = []
-        # self.test_labels = []
-        # self.test_features = []
 
         self.train_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
@@ -70,7 +67,7 @@ class LitModel(L.LightningModule):
         
         #Perform mixup
         y_one_hot = F.one_hot(y,num_classes=self.num_classes)
-        
+
         try:
             #For PANN models
             y_one_hot = do_mixup(y_one_hot,self.model_ft.lambdas)
@@ -81,8 +78,12 @@ class LitModel(L.LightningModule):
         
         loss = F.cross_entropy(y_pred, y_one_hot)
         
-        #self.train_acc.update(y_pred, y)
-        self.train_acc(y_pred, y_one_hot)
+        
+        # Convert soft labels to hard labels for accuracy calculation
+        y_hard = torch.argmax(y_one_hot, dim=1)
+    
+        self.train_acc(y_pred, y_hard)
+    #    self.train_acc(y_pred, y_one_hot)
         # self.train_acc(y_pred, y)
         self.log('train_acc', self.train_acc, on_step=False, on_epoch=True)
         self.log('loss', loss, on_step=True, on_epoch=True)
@@ -90,8 +91,7 @@ class LitModel(L.LightningModule):
         return loss
 
     #def on_train_epoch_end(self):
-    #    self.log('train_acc_epoch', self.train_acc.compute())
-    #    self.train_acc.reset()   
+
 
 
     def validation_step(self, val_batch, batch_idx):
@@ -99,7 +99,6 @@ class LitModel(L.LightningModule):
         features, y_pred = self(x)
         val_loss = F.cross_entropy(y_pred, y)
         
-    #    self.val_acc.update(y_pred, y)
         
         self.val_acc(y_pred, y)
         self.log('val_loss', val_loss, on_step=False, on_epoch=True)
@@ -108,16 +107,13 @@ class LitModel(L.LightningModule):
         return val_loss
  
     #def on_validation_epoch_end(self):
-    #    self.log('val_acc_epoch', self.val_acc.compute())
-    #    self.val_acc.reset()   
+
  
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
         features, y_pred = self(x)
         test_loss = F.cross_entropy(y_pred, y)
         
-        #self.test_acc.update(y_pred, y)
-        #self.test_f1.update(y_pred, y)
         
         self.test_acc(y_pred, y)
         self.test_f1(y_pred, y)  
@@ -126,10 +122,6 @@ class LitModel(L.LightningModule):
         self.log('test_acc', self.test_acc, on_step=False, on_epoch=True)
         self.log('test_f1', self.test_f1, on_step=False, on_epoch=True)  
     
-        # Store predictions, true labels, and features
-        # self.test_preds.append(y_pred.cpu())
-        # self.test_labels.append(y.cpu())
-        # self.test_features.append(features.cpu())
     
         return test_loss
 

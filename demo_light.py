@@ -45,18 +45,7 @@ from Utils.Network_functions import CustomPANN, initialize_model, download_weigh
 
 from LitModel import LitModel
 
-# class FineTuneLearningRateFinder(LearningRateFinder):
-#     def __init__(self, milestones, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.milestones = milestones
-
-#     def on_fit_start(self, *args, **kwargs):
-#         return
-
-#     def on_train_epoch_start(self, trainer, LightningModule):
-#         if trainer.current_epoch in self.milestones or trainer.current_epoch == 0:
-#             self.lr_find(trainer, LightningModule)
-            
+    
 def main(Params):
 
     # Name of dataset
@@ -87,8 +76,6 @@ def main(Params):
     
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
-    
-    #pdb.set_trace()
     
     s_rate=Params['sample_rate']
 
@@ -209,7 +196,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/Mixup_Test/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='mobilenetv3_large_100', #CNN_14_16k #CNN_14_16k #ViT-B/16
+    parser.add_argument('--model', type=str, default='convnextv2_tiny.fcmae', #CNN_14_16k #convnextv2_tiny.fcmae 
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')

@@ -27,8 +27,8 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 from Datasets.Get_preprocessed_data import process_data
-from lightning.pytorch.callbacks import LearningRateFinder
-from torch_lr_finder import LRFinder
+#from lightning.pytorch.callbacks import LearningRateFinder
+#from torch_lr_finder import LRFinder
 import pdb
 
 # This code uses a newer version of numpy while other packages use an older version of numpy
@@ -41,7 +41,7 @@ np.bool = bool  # module 'numpy' has no attribute 'bool'
 
 from SSDataModule import SSAudioDataModule
 
-from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
+#from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
 
 from LitModel import LitModel
 
@@ -127,15 +127,6 @@ def main(Params):
             logger=logger
         )
         
-        # model = nn.Sequential(model_AST.mel_extractor, model_AST.model_ft)
-        # criterion = nn.CrossEntropyLoss()
-        # optimizer = torch.optim.Adam(model.parameters(), lr=1e-7, weight_decay=1e-2)
-        # lr_finder = LRFinder(model, optimizer, criterion, device="cuda")
-        # lr_finder.range_test(data_module.train_dataloader(), end_lr=100, num_iter=100)
-        # lr_finder.plot() # to inspect the loss-learning rate graph
-        # pdb.set_trace()
-        # lr_finder.reset() # to reset the model and optimizer to their initial state
-        
     
         trainer.fit(model=model_AST, datamodule=data_module)
     
@@ -196,7 +187,7 @@ def parse_args():
                         help='Save results of experiments (default: True)')
     parser.add_argument('--folder', type=str, default='Saved_Models/Mixup_Test/',
                         help='Location to save models')
-    parser.add_argument('--model', type=str, default='convnextv2_tiny.fcmae', #CNN_14_16k #convnextv2_tiny.fcmae 
+    parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_16k #convnextv2_tiny.fcmae 
                         help='Select baseline model architecture')
     parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
@@ -214,11 +205,11 @@ def parse_args():
                         help='input batch size for validation (default: 512)')
     parser.add_argument('--test_batch_size', type=int, default=128,
                         help='input batch size for testing (default: 256)')
-    parser.add_argument('--num_epochs', type=int, default=20,
+    parser.add_argument('--num_epochs', type=int, default=1,
                         help='Number of epochs to train each model for (default: 50)')
     parser.add_argument('--resize_size', type=int, default=256,
                         help='Resize the image before center crop. (default: 256)')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=5e-5,
                         help='learning rate (default: 0.001)')
     parser.add_argument('--use-cuda', default=True, action=argparse.BooleanOptionalAction,
                         help='enables CUDA training')
@@ -226,9 +217,9 @@ def parse_args():
                         help='Audio feature for extraction')
     parser.add_argument('--optimizer', type=str, default='Adam',
                         help='Select optimizer')
-    parser.add_argument('--patience', type=int, default=10,
+    parser.add_argument('--patience', type=int, default=5,
                         help='Number of epochs to train each model for (default: 50)')
-    parser.add_argument('--sample_rate', type=int, default=32000,
+    parser.add_argument('--sample_rate', type=int, default=64000,
                         help='Dataset Sample Rate')
     args = parser.parse_args()
     return args

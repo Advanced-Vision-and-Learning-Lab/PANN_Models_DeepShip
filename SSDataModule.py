@@ -52,7 +52,7 @@ class SSAudioDataModule(L.LightningDataModule):
     def create_class_index_mapping(self):
         class_names = [d for d in os.listdir(self.data_dir) if os.path.isdir(os.path.join(self.data_dir, d))]
         class_to_idx = {class_name: i for i, class_name in enumerate(sorted(class_names))}
-        print(f"Class to index mapping: {class_to_idx}")
+        print(f"Class: {class_to_idx}")
         return class_to_idx
 
     def list_wav_files(self):

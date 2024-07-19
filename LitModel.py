@@ -42,7 +42,8 @@ class LitModel(L.LightningModule):
             use_pretrained=Params['use_pretrained'], 
             feature_extract=Params['feature_extraction'], 
             num_classes=num_classes,
-            pretrained_loaded=pretrained_loaded 
+            pretrained_loaded=pretrained_loaded,
+            d_sr=Params['sample_rate']
         )
 
 

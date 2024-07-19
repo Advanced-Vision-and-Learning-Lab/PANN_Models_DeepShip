@@ -9,7 +9,7 @@ Created on Thu Jun 27 14:51:00 2024
 from __future__ import print_function
 from __future__ import division
 import numpy as np
-
+import pdb
 ## PyTorch dependencies
 import torch
 import torch.nn as nn
@@ -46,7 +46,8 @@ class MelSpectrogramExtractor(nn.Module):
         self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=win_length, 
             n_mels=n_mels, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, freeze_parameters=True)
         
-        # Spec augmenter
+
+        # Spec augmenter 
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
             freq_drop_width=8, freq_stripes_num=2)
         
@@ -78,6 +79,9 @@ class MelSpectrogramExtractor(nn.Module):
         return log_mel_spectrogram
 
 
+
+
+
 class CustomPANN(nn.Module):
     def __init__(self, model):
         super(CustomPANN, self).__init__()
@@ -93,6 +97,7 @@ class CustomPANN(nn.Module):
     def forward(self, x):
         
         if self.training:
+            
             self.lambdas = self.mixup_augmenter.get_lambda(batch_size=x.shape[0])
             
             #Convert to tensors on same device as data
@@ -146,19 +151,19 @@ def download_weights(url, destination):
     else:
         print(f"Weights already exist at {destination}.\n")
 
-def initialize_model(model_name, use_pretrained, feature_extract, num_classes, pretrained_loaded=False):
+def initialize_model(model_name, use_pretrained, feature_extract, num_classes, pretrained_loaded=False, d_sr=32000):
     model_params = {
         'CNN_14_8k': {
             'class': Cnn14,
             'pretrained_url': "https://zenodo.org/records/3987831/files/Cnn14_8k_mAP%3D0.416.pth?download=1",
             'weights_name': "Cnn14_8k_mAP=0.416.pth",
-            'sample_rate': 8000, 'window_size': 256, 'hop_size': 80, 'mel_bins': 64, 'fmin': 50, 'fmax': 3500
+            'sample_rate': 8000, 'window_size': 256, 'hop_size': 80, 'mel_bins': 64, 'fmin': 50, 'fmax': 4000
         },
         'CNN_14_16k': {
             'class': Cnn14,
             'pretrained_url': "https://zenodo.org/records/3987831/files/Cnn14_16k_mAP%3D0.438.pth?download=1",   
             'weights_name': "Cnn14_16k_mAP=0.438.pth",
-            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 7000
+            'sample_rate': 16000, 'window_size': 512, 'hop_size': 160, 'mel_bins': 64, 'fmin': 50, 'fmax': 8000
         },
         'CNN_14_32k': {
             'class': Cnn14,
@@ -236,7 +241,7 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           weights_name = params['weights_name']  
           weights_path = f"./PANN_Weights/{weights_name}"  
     
-          model_ft = model_class(sample_rate=sample_rate, window_size=window_size, hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, classes_num=527)
+          model_ft = model_class(sample_rate=sample_rate, data_sample_rate=d_sr, window_size=window_size, hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, classes_num=527)
     
           if use_pretrained and not pretrained_loaded:
               if not os.path.exists(weights_path) or os.path.getsize(weights_path) == 0:

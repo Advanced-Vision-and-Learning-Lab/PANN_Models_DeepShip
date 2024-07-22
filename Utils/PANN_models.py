@@ -168,7 +168,7 @@ class Cnn14(nn.Module):
             n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
             freeze_parameters=True)
 
-
+        
         # Adjust time_drop_width based on both model_sample_rate and data_sample_rate
         if sample_rate == data_sample_rate:
             time_drop_width = 64
@@ -204,6 +204,8 @@ class Cnn14(nn.Module):
         #pdb.set_trace()
         x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        pdb.set_trace()
 
         x = x.transpose(1, 3)
         x = self.bn0(x)

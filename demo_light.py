@@ -199,7 +199,7 @@ def parse_args():
                         help='Flag for feature extraction. False, train whole model. True, only update fully connected and histogram layers parameters (default: True)')
     parser.add_argument('--use_pretrained', default=True, action=argparse.BooleanOptionalAction,
                         help='Flag to use pretrained model from ImageNet or train from scratch (default: True)')
-    parser.add_argument('--train_batch_size', type=int, default=64,
+    parser.add_argument('--train_batch_size', type=int, default=32,
                         help='input batch size for training (default: 128)')
     parser.add_argument('--val_batch_size', type=int, default=128,
                         help='input batch size for validation (default: 512)')
@@ -219,7 +219,7 @@ def parse_args():
                         help='Select optimizer')
     parser.add_argument('--patience', type=int, default=5,
                         help='Number of epochs to train each model for (default: 50)')
-    parser.add_argument('--sample_rate', type=int, default=64000,
+    parser.add_argument('--sample_rate', type=int, default=16000,
                         help='Dataset Sample Rate')
     args = parser.parse_args()
     return args

@@ -1,25 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 27 14:51:00 2024
-
-@author: amir.m
-"""
 
 from __future__ import print_function
 from __future__ import division
 import numpy as np
-import pdb
-## PyTorch dependencies
 import torch
 import torch.nn as nn
-
 import os
 import requests
-
 from Utils.PANN_models import Cnn14, ResNet38, MobileNetV1, Res1dNet31, Wavegram_Logmel_Cnn14  
 import timm
-
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 from Utils.pytorch_utils import Mixup, do_mixup
@@ -77,8 +65,6 @@ class MelSpectrogramExtractor(nn.Module):
             self.lambdas = None
         
         return log_mel_spectrogram
-
-
 
 
 
@@ -260,7 +246,6 @@ def initialize_model(model_name, use_pretrained, feature_extract, num_classes, p
           mel_extractor = nn.Sequential() 
           
           
-
     
     else:
           # TIMM models

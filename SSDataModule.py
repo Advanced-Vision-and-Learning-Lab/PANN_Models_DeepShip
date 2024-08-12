@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jun 12 15:22:15 2024
-
-@author: amir.m
-"""
 
 import os
 import numpy as np
@@ -13,8 +6,6 @@ from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 from scipy.io import wavfile
 import lightning as L
-from sklearn.model_selection import StratifiedShuffleSplit
-import librosa
 import random
 
 class SSAudioDataset(Dataset):
@@ -42,12 +33,10 @@ class SSAudioDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.test_size = test_size
         self.val_size = val_size
-        #self.class_to_idx = {'Cargo': 0, 'Passengership': 1, 'Tanker': 2, 'Tug': 3}
-        self.class_to_idx = self.create_class_index_mapping()  # Dynamically create class indices
-
+        self.class_to_idx = self.create_class_index_mapping()  
         self.prepared = False
         self.sample_rate = sample_rate
-        self.raw_data_list = []  # To store raw data
+        self.raw_data_list = []  
 
     def create_class_index_mapping(self):
         class_names = [d for d in os.listdir(self.data_dir) if os.path.isdir(os.path.join(self.data_dir, d))]
@@ -351,10 +340,9 @@ class SSAudioDataModule(L.LightningDataModule):
                 
                 self.prepared = True
 
-    
+
     def setup(self, stage=None):
         pass
-
 
     #Batch size is double if mixup
     def train_dataloader(self):

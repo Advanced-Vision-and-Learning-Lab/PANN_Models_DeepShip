@@ -205,8 +205,6 @@ class Cnn14(nn.Module):
         x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
-        pdb.set_trace()
-
         x = x.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)

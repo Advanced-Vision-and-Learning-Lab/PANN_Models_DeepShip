@@ -1,35 +1,19 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Apr 17 11:01:06 2024
-
-@author: amir.m
-"""
 
 from __future__ import print_function
 from __future__ import division
 import numpy as np
 import argparse
-import random
 
 # PyTorch dependencies
 import torch
-import torch.nn as nn
 
 # Local external libraries
 from Demo_Parameters import Parameters
-
-import lightning as L
-from lightning import LightningModule
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
-
 from Datasets.Get_preprocessed_data import process_data
-#from lightning.pytorch.callbacks import LearningRateFinder
-#from torch_lr_finder import LRFinder
-import pdb
 
 # This code uses a newer version of numpy while other packages use an older version of numpy
 # This is a simple workaround to avoid errors that arise from the deprecation of numpy data types
@@ -38,13 +22,8 @@ np.int = int  # module 'numpy' has no attribute 'int'
 np.object = object  # module 'numpy' has no attribute 'object'
 np.bool = bool  # module 'numpy' has no attribute 'bool'
 
-
 from SSDataModule import SSAudioDataModule
-
-#from Utils.Network_functions import CustomPANN, initialize_model, download_weights, set_parameter_requires_grad
-
 from LitModel import LitModel
-
     
 def main(Params):
 
@@ -66,13 +45,10 @@ def main(Params):
     run_number = 0
     seed_everything(run_number+1, workers=True)
 
-    data_dir = Params["data_dir"]  
     new_dir = Params["new_dir"]  
     
     process_data(sample_rate=Params['sample_rate'], segment_length=Params['segment_length'])
-    print("\nDataset sample rate: ", Params['sample_rate'])
     print("\nModel name: ", model_name, "\n")
-    
     
     data_module = SSAudioDataModule(new_dir, batch_size=batch_size, sample_rate=Params['sample_rate'])
     data_module.prepare_data()
@@ -82,13 +58,12 @@ def main(Params):
     torch.set_float32_matmul_precision('medium')
     all_val_accs = []
     all_test_accs = []
-    all_test_f1s = []
     
     for run_number in range(numRuns):
         if run_number != 0:
             seed_everything(run_number + 1, workers=True)
     
-        print(f'\nStarting Run {run_number}\n')
+        print(f'\nStarting Run {run_number}')
     
         checkpoint_callback = ModelCheckpoint(
             monitor='val_acc',
@@ -126,7 +101,6 @@ def main(Params):
             deterministic=False,
             logger=logger
         )
-        
     
         trainer.fit(model=model_AST, datamodule=data_module)
     
@@ -145,9 +119,6 @@ def main(Params):
         )
     
         test_results = trainer.test(model=best_model, datamodule=data_module)
-        
-        best_test_f1 = test_results[0]['test_f1']
-        all_test_f1s.append(best_test_f1)
     
         best_test_acc = test_results[0]['test_acc']
         all_test_accs.append(best_test_acc)
@@ -157,16 +128,12 @@ def main(Params):
             file.write(f"Run_{run_number}:\n\n")
             file.write(f"Best Validation Accuracy: {best_val_acc:.4f}\n")
             file.write(f"Best Test Accuracy: {best_test_acc:.4f}\n")
-            file.write(f"Best Test F1 Score: {best_test_f1:.4f}\n\n")
     
     overall_avg_val_acc = np.mean(all_val_accs)
     overall_std_val_acc = np.std(all_val_accs)
     
     overall_avg_test_acc = np.mean(all_test_accs)
     overall_std_test_acc = np.std(all_test_accs)
-    
-    overall_avg_test_f1 = np.mean(all_test_f1s)
-    overall_std_test_f1 = np.std(all_test_f1s)
     
     summary_filename = f"tb_logs/{model_name}_b{batch_size}_{s_rate}/summary_metrics.txt"
     with open(summary_filename, "w") as file:
@@ -175,26 +142,16 @@ def main(Params):
         file.write(f"Overall Standard Deviation of Best Validation Accuracies: {overall_std_val_acc:.4f}\n\n")
         file.write(f"Overall Average of Best Test Accuracies: {overall_avg_test_acc:.4f}\n")
         file.write(f"Overall Standard Deviation of Best Test Accuracies: {overall_std_test_acc:.4f}\n\n")
-        file.write(f"Overall Average of Best Test F1 Scores: {overall_avg_test_f1:.4f}\n")
-        file.write(f"Overall Standard Deviation of Best Test F1 Scores: {overall_std_test_f1:.4f}\n\n")
     
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Run histogram experiments for dataset')
-    parser.add_argument('--save_results', default=True, action=argparse.BooleanOptionalAction,
-                        help='Save results of experiments (default: True)')
-    parser.add_argument('--folder', type=str, default='Saved_Models/Mixup_Test/',
-                        help='Location to save models')
+        description='Run experiments')
     parser.add_argument('--model', type=str, default='CNN_14_32k', #CNN_14_16k #convnextv2_tiny.fcmae 
                         help='Select baseline model architecture')
-    parser.add_argument('--histogram', default=False, action=argparse.BooleanOptionalAction,
-                        help='Flag to use histogram model or baseline global average pooling (GAP), --no-histogram (GAP) or --histogram')
     parser.add_argument('--data_selection', type=int, default=0,
                         help='Dataset selection: See Demo_Parameters for full list of datasets')
-    parser.add_argument('-numBins', type=int, default=16,
-                        help='Number of bins for histogram layer. Recommended values are 4, 8 and 16. (default: 16)')
     parser.add_argument('--feature_extraction', default=False, action=argparse.BooleanOptionalAction,
                         help='Flag for feature extraction. False, train whole model. True, only update fully connected and histogram layers parameters (default: True)')
     parser.add_argument('--use_pretrained', default=True, action=argparse.BooleanOptionalAction,

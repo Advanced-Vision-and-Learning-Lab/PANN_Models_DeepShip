@@ -1,22 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Jul  1 11:55:14 2024
-
-@author: amir.m
-"""
 
 from __future__ import print_function
 from __future__ import division
 import numpy as np
-
 import torch
-
-import pdb
-
 import torch.nn.functional as F
-import os
-
 import lightning as L
 import torchmetrics
 from Utils.Network_functions import initialize_model
@@ -50,7 +37,6 @@ class LitModel(L.LightningModule):
         self.train_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
         self.test_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
-        self.test_f1 = torchmetrics.classification.MulticlassF1Score(num_classes=num_classes, average='weighted')
 
         self.save_hyperparameters()
 
@@ -84,15 +70,10 @@ class LitModel(L.LightningModule):
         y_hard = torch.argmax(y_one_hot, dim=1)
     
         self.train_acc(y_pred, y_hard)
-    #    self.train_acc(y_pred, y_one_hot)
-        # self.train_acc(y_pred, y)
         self.log('train_acc', self.train_acc, on_step=False, on_epoch=True)
         self.log('loss', loss, on_step=True, on_epoch=True)
         
         return loss
-
-    #def on_train_epoch_end(self):
-
 
 
     def validation_step(self, val_batch, batch_idx):
@@ -107,22 +88,16 @@ class LitModel(L.LightningModule):
     
         return val_loss
  
-    #def on_validation_epoch_end(self):
-
  
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
         features, y_pred = self(x)
         test_loss = F.cross_entropy(y_pred, y)
         
-        
         self.test_acc(y_pred, y)
-        self.test_f1(y_pred, y)  
     
         self.log('test_loss', test_loss, on_step=False, on_epoch=True)
         self.log('test_acc', self.test_acc, on_step=False, on_epoch=True)
-        self.log('test_f1', self.test_f1, on_step=False, on_epoch=True)  
-    
     
         return test_loss
 

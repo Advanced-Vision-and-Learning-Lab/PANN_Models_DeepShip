@@ -38,13 +38,13 @@ https://github.com/Peeples-Lab/PANN_Models_DeepShip
 └── root directory
     ├── demo_light.py                     // Run this. Main demo file.
     ├── Demo_Parameters.py                // Parameter file for the demo.
-    ├── LitModel.py                       // Prepare the PyTorch Lightning framework.
-    ├── SSDataModule.py                   // Load and preprocess the dataset.
     └── Datasets                
         ├── Get_Preprocessed_Data.py      // Resample the audio data and generate segments for the dataset.
+        ├── SSDataModule.py               // Load and preprocess the dataset.
     └── Utils                     
         ├── Network_functions.py          // Contains functions to initialize the modelS.
         ├── PANN_models.py          	  // Contains the PANN modelS.
+        ├── LitModel.py                   // Prepare the PyTorch Lightning framework.
 
 
 ```

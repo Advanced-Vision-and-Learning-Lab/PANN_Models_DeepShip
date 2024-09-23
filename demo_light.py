@@ -22,8 +22,8 @@ np.int = int  # module 'numpy' has no attribute 'int'
 np.object = object  # module 'numpy' has no attribute 'object'
 np.bool = bool  # module 'numpy' has no attribute 'bool'
 
-from SSDataModule import SSAudioDataModule
-from LitModel import LitModel
+from Datasets.SSDataModule import SSAudioDataModule
+from Utils.LitModel import LitModel
     
 def main(Params):
 

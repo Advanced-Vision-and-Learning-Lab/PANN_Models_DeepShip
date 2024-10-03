@@ -9,6 +9,8 @@
 Amirmohammad Mohammadi, Tejashri Kelhe, Davelle Carreiro, Alexandra Van Dine and Joshua Peeples
 
 Note: If this code is used, cite it: Amirmohammad Mohammadi, Tejashri Kelhe, Davelle Carreiro, Alexandra Van Dine and Joshua Peeples. (2024, August 30) Peeples-Lab/PANN_Models_DeepShip: Initial Release (Version v1.0). 
+[`Zendo`](https://doi.org/10.5281/zenodo.13886743).https://zenodo.org/records/13886743
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13886743.svg)](https://doi.org/10.5281/zenodo.13886743)
 
 In this repository, we provide the paper and code for "Transfer Learning for Passive Sonar Classification using Pre-trained Audio and ImageNet Models."
 

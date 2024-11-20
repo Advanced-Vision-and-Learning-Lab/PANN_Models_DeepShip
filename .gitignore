@@ -6,6 +6,7 @@ Datasets/DeepShip
 tb_logs/
 PANN_Weights/
 features/
+cam/
 
 # Ignore specific large files
 

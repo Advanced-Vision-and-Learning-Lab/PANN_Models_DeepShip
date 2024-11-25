@@ -100,9 +100,6 @@ best_model.eval()  # Set the model to evaluation mode
 
 print('\n')
 
-correct = 0
-total = 0
-
 # Select one correctly classified sample per class for CAM analysis
 correct_samples_per_class = {}
 
@@ -140,16 +137,6 @@ for batch in test_loader:
     # Break outer loop if we have all classes covered
     if len(correct_samples_per_class) == len(class_to_idx):
         break
-
-# Print selected samples per class
-for class_name, (input_sample, label) in correct_samples_per_class.items():
-    print(f"Selected Sample for {class_name}:")
-    print(f"Input Tensor Shape: {input_sample.shape}")
-    print(f"Label: {label.item()}")
-
-sample_input, sample_label = correct_samples_per_class['Cargo']
-sample_input = sample_input.unsqueeze(0)  # Add batch dimension
-
 
 
 ### CAM ###
@@ -203,92 +190,105 @@ def generate_gradcam(model, input_tensor, target_class, last_conv_layer):
 
     return cam.cpu().detach().numpy()
 
-# Dictionary to store all correctly classified samples per class
-correct_samples_per_class = {class_name: [] for class_name in class_to_idx.keys()}
 
-# Populate dictionary with all correctly classified samples
+# Dictionaries to store correctly and misclassified samples per class
+correct_samples_per_class = {class_name: [] for class_name in class_to_idx.keys()}
+misclassified_samples_per_class = {class_name: [] for class_name in class_to_idx.keys()}
+
+# Populate dictionaries with correctly and misclassified samples
 for batch in test_loader:
     inputs, labels = batch
     inputs, labels = inputs.to(device), labels.to(device)
     
-    # Pass raw waveform directly to the model (no external spectrogram extraction)
+    # Pass raw waveform directly to the model
     outputs = best_model(inputs)  # The model handles spectrogram/log-mel extraction internally
     _, preds = torch.max(outputs[1], dim=1)  # Get predictions
 
     for i in range(len(labels)):
-        class_name = list(class_to_idx.keys())[list(class_to_idx.values()).index(labels[i].item())]
+        true_class_name = list(class_to_idx.keys())[list(class_to_idx.values()).index(labels[i].item())]
         
         if preds[i] == labels[i]:  # Correctly classified
-            correct_samples_per_class[class_name].append((inputs[i], labels[i]))
+            correct_samples_per_class[true_class_name].append((inputs[i], labels[i]))
+        else:  # Misclassified
+            predicted_class_name = list(class_to_idx.keys())[list(class_to_idx.values()).index(preds[i].item())]
+            misclassified_samples_per_class[true_class_name].append((inputs[i], labels[i], predicted_class_name))
 
 # Adjust last convolutional layer for ConvNeXt-based model
 last_conv_layer = best_model.model_ft.backbone.stages[-1].blocks[-1].conv_dw  # Last depthwise conv layer
 
+# Function to process Grad-CAM for a set of samples (correct or misclassified)
+def process_gradcam(samples_dict, description, save_single_example=True):
+    for class_name, samples in samples_dict.items():
+        print(f"Processing Grad-CAM for {len(samples)} {description} samples in class: {class_name}")
 
-# Process Grad-CAM for each class
-save_single_example = True  # Set this to True to save a single example per class
-for class_name, samples in correct_samples_per_class.items():
-    print(f"Processing Grad-CAM for {len(samples)} samples in class: {class_name}")
+        aggregated_cam = None
+        single_example_saved = True  # Track if a single example has been saved
 
-    aggregated_cam = None
-    single_example_saved = False  # Track if a single example has been saved
+        for idx, sample_data in enumerate(samples):
+            sample_input = sample_data[0].unsqueeze(0).to(device)  # Add batch dimension
+            target_class = sample_data[1].item()  # Get target class index
 
-    for idx, (sample_input, sample_label) in enumerate(samples):
-        sample_input = sample_input.unsqueeze(0).to(device)  # Add batch dimension
-        target_class = sample_label.item()  # Get target class index
+            # Pass raw waveform directly to the model (no external spectrogram extraction)
+            outputs = best_model(sample_input)  # The model handles spectrogram/log-mel extraction internally
 
-        # Pass raw waveform directly to the model (no external spectrogram extraction)
-        outputs = best_model(sample_input)  # The model handles spectrogram/log-mel extraction internally
+            # Generate Grad-CAM heatmap using the last convolutional layer
+            cam = generate_gradcam(best_model, sample_input, target_class, last_conv_layer)
 
-        # Generate Grad-CAM heatmap using the last convolutional layer
-        cam = generate_gradcam(best_model, sample_input, target_class, last_conv_layer)
+            # Resize CAM to match input dimensions (e.g., spectrogram size)
+            cam_resized = F.interpolate(torch.tensor(cam).unsqueeze(0).unsqueeze(0), size=(501, 64), mode='bilinear', align_corners=False)
+            cam_resized_np = cam_resized.squeeze().numpy()
 
-        # Resize CAM to match input dimensions (e.g., spectrogram size)
-        cam_resized = F.interpolate(torch.tensor(cam).unsqueeze(0).unsqueeze(0), size=(501, 64), mode='bilinear', align_corners=False)
-        cam_resized_np = cam_resized.squeeze().numpy()
+            # Aggregate CAMs (e.g., sum or average)
+            if aggregated_cam is None:
+                aggregated_cam = cam_resized_np
+            else:
+                aggregated_cam += cam_resized_np
 
-        # Aggregate CAMs (e.g., sum or average)
-        if aggregated_cam is None:
-            aggregated_cam = cam_resized_np
-        else:
-            aggregated_cam += cam_resized_np
+            # Save a single example if requested and not already saved
+            if save_single_example and not single_example_saved:
+                with torch.no_grad():
+                    spectrogram_output = best_model.mel_extractor.spectrogram_extractor(sample_input)
+                    logmel_output = best_model.mel_extractor.logmel_extractor(spectrogram_output)
 
-        # Save a single example if requested and not already saved
-        if save_single_example and not single_example_saved:
-            with torch.no_grad():
-                spectrogram_output = best_model.mel_extractor.spectrogram_extractor(sample_input)
-                logmel_output = best_model.mel_extractor.logmel_extractor(spectrogram_output)
+                logmel_output_np = logmel_output.squeeze(0).squeeze(0).cpu().numpy()  # Convert log-mel spectrogram to NumPy array
 
-            logmel_output_np = logmel_output.squeeze(0).squeeze(0).cpu().numpy()  # Convert log-mel spectrogram to NumPy array
+                plt.figure(figsize=(15, 5))
 
-            # Save the single example Grad-CAM with original spectrogram as subplot
-            plt.figure(figsize=(15, 5))
+                # Subplot 1: Original Log-Mel Spectrogram
+                plt.subplot(1, 2, 1)
+                plt.title(f"Log-Mel Spectrogram ({class_name}, Single Example)")
+                plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')
+                plt.colorbar()
 
-            # Subplot 1: Original Log-Mel Spectrogram
-            plt.subplot(1, 2, 1)
-            plt.title(f"Log-Mel Spectrogram ({class_name}, Single Example)")
-            plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')
+                # Subplot 2: Grad-CAM Heatmap Overlayed on Spectrogram
+                plt.subplot(1, 2, 2)
+                plt.title(f"Grad-CAM Heatmap ({class_name}, Single Example)")
+                plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')  # Background spectrogram
+                plt.imshow(cam_resized_np, aspect='auto', origin='lower', cmap='jet', alpha=0.5)  # Overlay CAM with transparency
+                plt.colorbar()
+
+                output_path = f"cam/figures_timm/gradcam_{class_name}_{description}_single.png"
+                plt.savefig(output_path, dpi=300)
+                plt.close()
+
+                single_example_saved = True  # Mark that the single example has been saved
+
+        if len(samples) > 0:
+            # Average CAM across all samples
+            aggregated_cam /= len(samples)
+
+            # Save aggregated CAM visualization
+            plt.figure(figsize=(10, 5))
+            plt.title(f"Aggregated Grad-CAM Heatmap ({class_name}, {description})")
+            plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5)
+            output_path_aggregated = f"cam/figures_timm/gradcam_{class_name}_{description}_aggregated.png"
             plt.colorbar()
-
-            # Subplot 2: Grad-CAM Heatmap Overlayed on Spectrogram
-            plt.subplot(1, 2, 2)
-            plt.title(f"Grad-CAM Heatmap ({class_name}, Single Example)")
-            plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')  # Background spectrogram
-            plt.imshow(cam_resized_np, aspect='auto', origin='lower', cmap='jet', alpha=0.5)  # Overlay CAM with transparency
-            plt.colorbar()
-
-            plt.savefig(f"cam/figures_timm/gradcam_{class_name}_single.png", dpi=300)
+            plt.savefig(output_path_aggregated, dpi=300)
             plt.close()
 
-            single_example_saved = True  # Mark that the single example has been saved
 
-    # Average CAM across all samples
-    aggregated_cam /= len(samples)
+# Process Grad-CAM for correctly classified samples
+process_gradcam(correct_samples_per_class, "correct")
 
-    # Save aggregated CAM visualization
-    plt.figure(figsize=(10, 5))
-    plt.title(f"Aggregated Grad-CAM Heatmap ({class_name})")
-    plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5)
-    plt.colorbar()
-    plt.savefig(f"cam/figures_timm/gradcam_{class_name}_aggregated.png", dpi=300)
-    plt.close()
+# Process Grad-CAM for misclassified samples
+process_gradcam(misclassified_samples_per_class, "misclassified")

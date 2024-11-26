@@ -184,9 +184,10 @@ def generate_gradcam(model, input_tensor, target_class, last_conv_layer):
         cam += weights[0, i] * activations[0, i]
 
     cam = F.relu(cam)  # Apply ReLU
-    cam -= cam.min()
-    if cam.max() > 0:
-        cam /= cam.max()
+    # cam -= cam.min()
+    # if cam.max() > 0:
+    #     cam /= cam.max()
+    cam = (cam - cam.min()) / (cam.max() + 1e-8)
 
     return cam.cpu().detach().numpy()
 
@@ -222,7 +223,7 @@ def process_gradcam(samples_dict, description, save_single_example=True):
         print(f"Processing Grad-CAM for {len(samples)} {description} samples in class: {class_name}")
 
         aggregated_cam = None
-        single_example_saved = True  # Track if a single example has been saved
+        single_example_saved = False  # Track if a single example has been saved
 
         for idx, sample_data in enumerate(samples):
             sample_input = sample_data[0].unsqueeze(0).to(device)  # Add batch dimension
@@ -238,6 +239,9 @@ def process_gradcam(samples_dict, description, save_single_example=True):
             cam_resized = F.interpolate(torch.tensor(cam).unsqueeze(0).unsqueeze(0), size=(501, 64), mode='bilinear', align_corners=False)
             cam_resized_np = cam_resized.squeeze().numpy()
 
+            # Normalize the individual CAM before aggregation
+            cam_resized_np = (cam_resized_np - cam_resized_np.min()) / (cam_resized_np.max() + 1e-8)
+    
             # Aggregate CAMs (e.g., sum or average)
             if aggregated_cam is None:
                 aggregated_cam = cam_resized_np
@@ -274,17 +278,17 @@ def process_gradcam(samples_dict, description, save_single_example=True):
                 single_example_saved = True  # Mark that the single example has been saved
 
         if len(samples) > 0:
-            # Average CAM across all samples
             aggregated_cam /= len(samples)
+            aggregated_cam = (aggregated_cam - aggregated_cam.min()) / (aggregated_cam.max() + 1e-8)
 
-            # Save aggregated CAM visualization
-            plt.figure(figsize=(10, 5))
-            plt.title(f"Aggregated Grad-CAM Heatmap ({class_name}, {description})")
-            plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5)
-            output_path_aggregated = f"cam/figures_timm/gradcam_{class_name}_{description}_aggregated.png"
-            plt.colorbar()
-            plt.savefig(output_path_aggregated, dpi=300)
-            plt.close()
+        # Save aggregated CAM visualization
+        plt.figure(figsize=(8, 6))
+        plt.title(f"Aggregated Grad-CAM Heatmap ({class_name}, {description})")
+        plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1)
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig(f"cam/figures_timm/gradcam_{class_name}_{description}_aggregated.png", dpi=300)
+        plt.close()
 
 
 # Process Grad-CAM for correctly classified samples

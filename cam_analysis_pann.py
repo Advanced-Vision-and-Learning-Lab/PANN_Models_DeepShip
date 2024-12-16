@@ -138,8 +138,13 @@ for batch in test_loader:
     if len(correct_samples_per_class) == len(class_to_idx):
         break
 
+
+
 ### CAM ###
+import torch
+import os
 from contextlib import contextmanager
+
 @contextmanager
 def register_hooks(layer, forward_hook, backward_hook):
     forward_handle = layer.register_forward_hook(forward_hook)
@@ -182,16 +187,12 @@ def generate_gradcam(model, input_tensor, target_class, last_conv_layer):
     for i in range(weights.shape[1]):
         cam += weights[0, i] * activations[0, i]
 
-    cam = F.relu(cam)  # Apply ReLU
-    # cam -= cam.min()
-    # if cam.max() > 0:
-    #     cam /= cam.max()
+    cam = F.relu(cam)  
+
     cam = (cam - cam.min()) / (cam.max() + 1e-8)
 
     return cam.cpu().detach().numpy()
-    
-    
-    
+
 # Dictionaries to store correctly and misclassified samples per class
 correct_samples_per_class = {class_name: [] for class_name in class_to_idx.keys()}
 misclassified_samples_per_class = {class_name: [] for class_name in class_to_idx.keys()}
@@ -213,6 +214,9 @@ for batch in test_loader:
             misclassified_samples_per_class[true_class_name].append((inputs[i], preds[i]))
 
 last_conv_layer = best_model.model_ft.backbone.conv_block6
+
+# Save directory
+os.makedirs("cam/figures_pann", exist_ok=True)
 
 # Function to process Grad-CAM for a given set of samples (correct or misclassified)
 def process_gradcam(samples_dict, save_path_prefix, description):
@@ -241,8 +245,8 @@ def process_gradcam(samples_dict, save_path_prefix, description):
             
             # Normalize the individual CAM before aggregation
             cam_resized_np = (cam_resized_np - cam_resized_np.min()) / (cam_resized_np.max() + 1e-8)
-    
-            # Aggregate CAMs (e.g., sum or average)
+
+            # Aggregate CAMs 
             if aggregated_cam is None:
                 aggregated_cam = cam_resized_np
             else:
@@ -253,34 +257,40 @@ def process_gradcam(samples_dict, save_path_prefix, description):
                 logmel_output_np = logmel_output.squeeze(0).squeeze(0).cpu().numpy()  # Convert log-mel spectrogram to NumPy array
 
                 # Save the single example Grad-CAM with original spectrogram as subplot
-                plt.figure(figsize=(15, 5))
-
+                plt.figure(figsize=(15, 15))  # Adjusted for better layout
+                
                 # Subplot 1: Original Log-Mel Spectrogram
                 plt.subplot(1, 2, 1)
-                plt.title(f"Log-Mel Spectrogram ({class_name}, Single Example)")
                 plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')
-                plt.colorbar()
-
+                plt.title(f"Log-Mel Spectrogram ({class_name}, Single Example)", fontsize=16)  # Increased fontsize
+                plt.colorbar(fontsize=12)  # Increased colorbar fontsize
+                # plt.axis('off')  # Keep axes visible
+                plt.xlabel('Time (s)', fontsize=14)          # Increased fontsize
+                plt.ylabel('Frequency (Hz)', fontsize=14)    # Increased fontsize
+                
                 # Subplot 2: Grad-CAM Heatmap Overlayed on Spectrogram
                 plt.subplot(1, 2, 2)
-                plt.title(f"Grad-CAM Heatmap ({class_name}, Single Example)")
                 plt.imshow(logmel_output_np, aspect='auto', origin='lower', cmap='viridis')  # Background spectrogram
                 plt.imshow(cam_resized_np, aspect='auto', origin='lower', cmap='jet', alpha=0.5)  # Overlay CAM with transparency
-                plt.colorbar()
+                plt.title(f"Grad-CAM Heatmap ({class_name}, Single Example)", fontsize=16)  # Increased fontsize
+                plt.colorbar(fontsize=12)  # Increased colorbar fontsize
+                # plt.axis('off')  # Keep axes visible
+                plt.xlabel('Time (s)', fontsize=14)          # Increased fontsize
+                plt.ylabel('Frequency (Hz)', fontsize=14)    # Increased fontsize
 
-                plt.savefig(f"{save_path_prefix}_{class_name}_single.png", dpi=300)
+                plt.tight_layout()
+                plt.savefig(f"{save_path_prefix}_{class_name}_single.png", dpi=300, bbox_inches='tight', pad_inches=0)
                 plt.close()
 
                 single_example_saved = True  # Mark that the single example has been saved
 
-        # Average CAM across all samples
         # Average CAM across all samples and normalize
         if len(samples) > 0:
             aggregated_cam /= len(samples)
             aggregated_cam = (aggregated_cam - aggregated_cam.min()) / (aggregated_cam.max() + 1e-8)
 
-        # Save aggregated CAM visualization
-        plt.figure(figsize=(8, 6))
+        # Save aggregated CAM with labels and colorbars (as per original code)
+        plt.figure(figsize=(8, 10))  # Adjust as needed
         plt.title(f"Aggregated Grad-CAM Heatmap ({class_name}, {description})")
         plt.imshow(logmel_output.squeeze(0).squeeze(0).cpu().numpy(), aspect='auto', origin='lower', cmap='viridis')
         plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1)
@@ -289,10 +299,39 @@ def process_gradcam(samples_dict, save_path_prefix, description):
         plt.savefig(f"{save_path_prefix}_{class_name}_{description}_aggregated.png", dpi=300)
         plt.close()
 
-# Process Grad-CAM for correctly classified samples
-process_gradcam(correct_samples_per_class, "cam/figures_pann/gradcam", "correctly classified")
+        # Save aggregated CAM without labels, titles, axes, or colorbars
+        plt.figure(figsize=(3, 6), dpi=600)  # Longer on y-axis, high resolution
+        plt.imshow(logmel_output.squeeze(0).squeeze(0).cpu().numpy(), aspect='auto', origin='lower', cmap='viridis')
+        plt.imshow(aggregated_cam, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1)
+        plt.axis('off')  # Remove axes
+        plt.tight_layout(pad=0)
+        plt.savefig(f"{save_path_prefix}_{class_name}_{description}_aggregated_no_labels.png", dpi=600, bbox_inches='tight', pad_inches=0)
+        plt.close()
 
-# Process Grad-CAM for misclassified samples
-process_gradcam(misclassified_samples_per_class, "cam/figures_pann/gradcam", "misclassified")    
+# Function to save a single colorbar
+def save_colorbar(save_path, cmap_name='jet', orientation='vertical'):
+    fig, ax = plt.subplots(figsize=(1, 6))  # Adjust width and height as needed
+    norm = plt.Normalize(vmin=0, vmax=1)
+    cmap = plt.get_cmap(cmap_name)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    # Create colorbar without any labels or ticks
+    cbar = plt.colorbar(sm, cax=ax, orientation=orientation, ticks=[])
+    cbar.outline.set_visible(False)  # Remove the outline
+
+    ax.axis('off')  # Remove axis
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+# Example usage: Process Grad-CAM for correctly classified and misclassified samples
+process_gradcam(correct_samples_per_class, "cam/figures_pann/gradcam", "correctly classified")
+process_gradcam(misclassified_samples_per_class, "cam/figures_pann/gradcam", "misclassified")
+
+# Save the colorbar once after processing all classes
+save_colorbar("cam/figures_pann/colorbar.png")
+
+
 
 

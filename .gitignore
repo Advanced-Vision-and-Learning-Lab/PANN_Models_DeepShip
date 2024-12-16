@@ -8,6 +8,3 @@ PANN_Weights/
 features/
 cam/
 
-# Ignore specific files
-cam_analysis_timm.py
-cam_analysis_pann.py

@@ -1,7 +1,7 @@
 # Downloading dataset:
 
 Note: Due to the size of the datasets, the audio files were not 
-uploaded to the repository. For the HLTDNN paper, DeepShip dataset was used. 
+uploaded to the repository. DeepShip dataset was used. 
 Please follow the following instructions
 to ensure the code works. If the dataset is used,
 please cite the appropiate source (paper, repository, etc.) as mentioned
@@ -14,10 +14,10 @@ and follow these instructions:
 
 1. Create a folder called `Deepship`
 2. Download the signals for each class in the `Deepship` folder:
-        [`Cargo`](https://drive.google.com/drive/folders/1YyzrgY2tfFwtch3oTS29XUvKtEnsTgbw)
-        [`Passengership`](https://drive.google.com/drive/folders/1aLn-XVaPYP8-RUzpS2SBDkGuNTWKtiNi)
-        [`Tanker`](https://drive.google.com/drive/folders/1d-MrUfb8fPX8EmZIfVO5oBetVTxXfyOA)
-        [`Tug`](https://drive.google.com/drive/folders/1b_gNLNammWm1HsRa3muLryccHQEAHDnT)
+        [`Cargo`](https://drive.google.com/drive/folders/1AddVN9KJ0FYn7RewdTrn7G_zrwIe0EtA?usp=drive_link)
+        [`Passengership`](https://drive.google.com/drive/folders/1JcLyv9hJO1tXDGJp_d8WXrBigwWL5M1Y?usp=sharing)
+        [`Tanker`](https://drive.google.com/drive/folders/11WlEFTtE_HRjNmJnohmiyPGkT91t2ktN?usp=drive_link)
+        [`Tug`](https://drive.google.com/drive/folders/1W-1ZQ-9mB8mLZqIaD6GlKaQGUEvgu6G0?usp=sharing)
 3. The structure of the `Deepship` folder is as follows:
 ```
 Deepship/

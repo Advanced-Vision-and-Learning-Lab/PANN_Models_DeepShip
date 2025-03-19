@@ -13,7 +13,7 @@ Note: If this code is used, cite it: Amirmohammad Mohammadi, Tejashri Kelhe, Dav
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13886743.svg)](https://doi.org/10.5281/zenodo.13886743)
 
 Version v2.0:
-[arXiv](link)](https://urldefense.com/v3/__http://arxiv.org/abs/2409.13878__;!!KwNVnqRv!GvdhXKUUcpNcA8rrN3pd5egk39iLCjq2wUvYakpZD1spxkkGOL6-o0VjrYpAXyE2phYvF7Edhk2BVrm_$)
+[arXiv](https://arxiv.org/abs/2409.13878)
 
 In this repository, we provide the paper and code for "Transfer Learning for Passive Sonar Classification using Pre-trained Audio and ImageNet Models."
 

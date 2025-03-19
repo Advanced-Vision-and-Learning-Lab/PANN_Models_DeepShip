@@ -60,4 +60,11 @@ This source code is licensed under the license found in the [`LICENSE`](LICENSE)
 
 This product is Copyright (c) 2024 A. Mohammadi, T. Kelhe, D. Carreiro, A. Dine and J. Peeples. All rights reserved.
 
+## Citation
+
+If you use our work, please cite:
+
+**Cross-Domain Knowledge Transfer for Underwater Acoustic Classification Using Pre-trained Models**  
+Amirmohammad Mohammadi, Tejashri Kelhe, Davelle Carreiro, Alexandra Van Dine, and Joshua Peeples  
+Available on [arXiv](https://arxiv.org/abs/2409.13878).
 

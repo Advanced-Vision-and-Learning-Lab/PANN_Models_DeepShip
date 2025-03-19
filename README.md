@@ -1,16 +1,19 @@
-# Transfer Learning for Passive Sonar Classification using Pre-trained Audio and ImageNet Models:
+# Cross-Domain Knowledge Transfer for Underwater Acoustic Classification Using Pre-trained Models:
 <p align="center">
   <img src="Figures/Workflow.png" alt="Workflow Diagram">
 </p>
 
 
-**Transfer Learning for Passive Sonar Classification using Pre-trained Audio and ImageNet Models**
+**Cross-Domain Knowledge Transfer for Underwater Acoustic Classification Using Pre-trained Models**
 
 Amirmohammad Mohammadi, Tejashri Kelhe, Davelle Carreiro, Alexandra Van Dine and Joshua Peeples
 
 Note: If this code is used, cite it: Amirmohammad Mohammadi, Tejashri Kelhe, Davelle Carreiro, Alexandra Van Dine and Joshua Peeples. (2024, August 30) Peeples-Lab/PANN_Models_DeepShip: Initial Release (Version v1.0). 
 [`Zendo`](https://doi.org/10.5281/zenodo.13886743).https://zenodo.org/records/13886743
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13886743.svg)](https://doi.org/10.5281/zenodo.13886743)
+
+Version v2.0:
+[arXiv](link)](https://urldefense.com/v3/__http://arxiv.org/abs/2409.13878__;!!KwNVnqRv!GvdhXKUUcpNcA8rrN3pd5egk39iLCjq2wUvYakpZD1spxkkGOL6-o0VjrYpAXyE2phYvF7Edhk2BVrm_$)
 
 In this repository, we provide the paper and code for "Transfer Learning for Passive Sonar Classification using Pre-trained Audio and ImageNet Models."
 
